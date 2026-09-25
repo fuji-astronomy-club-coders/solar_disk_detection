@@ -1,8 +1,8 @@
+
 import cv2
-import numpy as np
-import matplotlib.pyplot as plt
 import matplotlib.gridspec as gridspec
-from typing import List, Tuple, Union, Optional
+import matplotlib.pyplot as plt
+import numpy as np
 
 """
 最小二乗法による円の検出を行う関数
@@ -21,17 +21,18 @@ cx,cy,r = MIN2_ignore_sunspots(img)
 """
 
 
-def cut_and_sampling(sun_threshold: Union[int, float]) -> List[List[int]]:
+def cut_and_sampling(sun_threshold: int | float) -> list[list[int]]:
     """画像を分割線で走査し、輝度の変化（微分値）から太陽の縁（エッジ）に相当する点の座標をサンプリングする。
 
     Args:
         sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
 
-    Returns:
+    Returns
+    -------
         List[List[int]]: サンプリングされた縁の座標 [x, y] のリスト。
     """
     # 画像を分割して実際の縁の点を収集
-    spots: List[List[int]] = []  # 実際の縁の点を格納するための配列
+    spots: list[list[int]] = []  # 実際の縁の点を格納するための配列
     for line_xy in ("x_line", "y_line"):  # x_lineは横線、y_lineは縦線
         for i in range(1, divnum):
             place = (
@@ -56,16 +57,18 @@ def cut_and_sampling(sun_threshold: Union[int, float]) -> List[List[int]]:
     return spots  # 縁の点の座標を返す
 
 
-def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
+def fit_circle(spots: list[list[int]] | np.ndarray) -> list[float]:
     """与えられた縁の点の座標群から、最小二乗法を用いて近似円の中心座標と半径を計算する。
 
     Args:
         spots (Union[List[List[int]], np.ndarray]): 縁の点の座標 [x, y] を格納した二次元配列、またはNumPy配列。
 
-    Raises:
+    Raises
+    ------
         Exception: 与えられた座標が3点未満で円を確定できない場合に例外を発生させる。
 
-    Returns:
+    Returns
+    -------
         List[float]: 近似円の中心X座標、中心Y座標、半径を含むリスト [cx, cy, R]。
     """
     if len(spots) < 3:
@@ -85,11 +88,11 @@ def fit_circle(spots: Union[List[List[int]], np.ndarray]) -> List[float]:
 
 
 def show_circle(
-    spots: List[List[int]] = None,
-    cir_stat: Union[Tuple[float, float, float], List[float], bool] = False,
+    spots: list[list[int]] = None,
+    cir_stat: tuple[float, float, float] | list[float] | bool = False,
     img_name: str = "Unknown",
     img_path: str = "",
-    iteration_count: Union[int, str] = 1,
+    iteration_count: int | str = 1,
     is_last: bool = False,
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、およびフィッティングされた近似円を描画し、
@@ -139,11 +142,11 @@ def show_circle(
         circle = Circle((cx, cy), R, fill=False, color="orange", linewidth=2)
         ax_main.add_patch(circle)
 
-    x, y = zip(*spots)
+    x, y = zip(*spots, strict=False)
     ax_main.scatter(x, y, color="red", label="Edges", s=50)
 
     # 座標ラベルと対応関係のための番号を表示
-    for idx, (xi, yi) in enumerate(zip(x, y)):
+    for idx, (xi, yi) in enumerate(zip(x, y, strict=False)):
         # グラフと対応させる番号を大きく表示
         ax_main.text(
             xi,
@@ -187,7 +190,7 @@ def show_circle(
     # === 各エッジ点付近の小グラフを作成 ===
     window_size = 15  # 抽出する近傍のサイズ（前後15ピクセル）
 
-    for idx, (xi, yi) in enumerate(zip(x, y)):
+    for idx, (xi, yi) in enumerate(zip(x, y, strict=False)):
         # 横線(x_line)上の点か、縦線(y_line)上の点かを判定
         is_x_line = any(yi == height * i // divnum for i in range(1, divnum))
 
@@ -249,7 +252,7 @@ def MIN2_ignore_sunspots(
     debug: bool = False,
     img_name: str = "Unknown",
     img_path: str = "",
-) -> Tuple[float, float, float]:
+) -> tuple[float, float, float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出する。
 
     Args:
@@ -260,7 +263,8 @@ def MIN2_ignore_sunspots(
         show (bool, optional): 最終的な検出結果の画像を表示するかどうか。デフォルトは False。
         debug (bool, optional): 各ステップ（1回目、外側のみ）の円描画やログを出力するかどうか。デフォルトは False。
 
-    Returns:
+    Returns
+    -------
         Tuple[float, float, float]: 最終的に算出された円の中心X座標(cx)、中心Y座標(cy)、および半径(r)のタプル。
     """
     global divnum
@@ -297,7 +301,7 @@ def MIN2_ignore_sunspots(
         cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float))
 
         if debug:
-            print(f"only outside circle")
+            print("only outside circle")
             #  2回目 (iteration_count=2)
             show_circle(
                 outside_spots,
@@ -316,7 +320,7 @@ def MIN2_ignore_sunspots(
         for i in range(len(spots)):
             x = spots[i][0]
             y = spots[i][1]
-            if not spots[i] in outside_spots:  # 内側の点だけ
+            if spots[i] not in outside_spots:  # 内側の点だけ
                 if (x - cxo) ** 2 > (y - cyo) ** 2:  # 円のRLTBのうちRLなら、
                     min2far = np.sqrt(ro**2 - (y - cyo) ** 2)
                     (
@@ -361,7 +365,7 @@ def MIN2_ignore_sunspots(
 
 
 if __name__ == "__main__":
-    from tkinter.filedialog import askopenfilename, askdirectory
+    from tkinter.filedialog import askdirectory, askopenfilename
 
     if input("onefile(0)/dir(1)?:") == "1":
 
