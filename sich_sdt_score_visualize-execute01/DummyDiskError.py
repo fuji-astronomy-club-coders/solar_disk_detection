@@ -22,8 +22,9 @@ if __name__ == "__main__":
 
     # --- 設定値のチェック ---
     # - demoConfig
-    modes=["percent","absolute"]
-    if demoConfig["mode"] not in modes:
+    known_modes=["percent","absolute"]
+    mode=demoConfig["mode"]
+    if mode not in known_modes:
         raise ValueError("modes is unknown value")
 
     # ===画像の読み込み===
@@ -46,7 +47,7 @@ if __name__ == "__main__":
     intcy=np.round(cy)
 
     #最大誤差(pix)を計算
-    if demoConfig["mode"]=="percent":
+    if mode=="percent":
         errorRange = [np.round(r)*v for v in demoConfig["errorSizes"]]
     else:
         errorRange=[np.round(v) for v in demoConfig["errorSizes"]]
