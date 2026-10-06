@@ -1,18 +1,18 @@
 demoConfig:
+    cropHW:
+        - 600 # h
+        - 600 # w
     mode: absolute # 'absolute' or 'percent' percentは半径に対する割合
     errorSizes: # 半径補正は偏差値動画にないので再現もなし
         - 3 # centerX
         - 3 # centerY
     weight: No #'No'or...
+fileConfig:
+    samplePath: "" #1channel,16bit画像のみ対応
     videoLength: 300 #(frame)
     framelate: 30 #(frame/second)
-    videoFolder: ""
-    videoExtens: ".mp4"
-sampleConfig:
-    cropHW:
-        - 600 # h
-        - 600 # w
-    imagePath: "" #1channel,16bit画像のみ対応
+    outputFolder: ""
+    outputoExtens: ".mp4"
 min2Config: #ver2.2.1
     n: 10
     light_threshold: 50

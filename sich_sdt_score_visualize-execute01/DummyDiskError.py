@@ -16,7 +16,7 @@ if __name__ == "__main__":
 
     with config_path.open(mode="r", encoding="utf-8") as file:
         config = yaml.safe_load(file)
-        sampleConfig = config["sampleConfig"]
+        fileConfig = config["fileConfig"]
         min2Config = config["min2Config"]
         demoConfig = config["demoConfig"]
 
@@ -26,9 +26,8 @@ if __name__ == "__main__":
     mode=demoConfig["mode"]
     if mode not in known_modes:
         raise ValueError("modes is unknown value")
-
     # ===画像の読み込み===
-    imagePath = Path(sampleConfig["imagePath"])
+    imagePath = Path(fileConfig["samplePath"])
     if not imagePath.exists():
         raise FileNotFoundError(f"存在しないファイルです:{imagePath}")
     image = (cv2.imread(imagePath), cv2.IMREAD_UNCHANGED)
@@ -60,7 +59,7 @@ if __name__ == "__main__":
     diffs=[]
     xmax,ymax=errorRange
     if weightMode == "No":
-        for f in range(demoConfig["videolength"]):
+        for f in range(fileConfig["videolength"]):
             xdiff = randint(-xmax, xmax)
             ydiff = randint(-ymax, ymax)
             diffs.append([xdiff,ydiff])
@@ -68,7 +67,7 @@ if __name__ == "__main__":
         raise ValueError(f"unknown weight mode:{weightMode}")
     # ---中心座標をもとに全フレームを生成---
     frames=[]
-    croph,cropw=sampleConfig["cropHW"]
+    croph,cropw=demoConfig["cropHW"]
     for xdiff,ydiff in diffs:
         frames.append(crop_and_pad(img=image,cx=intcx+xdiff,cy=intcy+ydiff,crop_h=croph,crop_w=cropw))
     frames=np.ndarray(frames)
@@ -80,8 +79,8 @@ if __name__ == "__main__":
 
     # ---動画出力---
     # 動画パスの設定
-    outdir=Path(demoConfig["videoFolder"])
-    outext=demoConfig["videoExtens"]
+    outdir=Path(fileConfig["videoFolder"])
+    outext=fileConfig["videoExtens"]
     videoname=imagePath.name+f"_{mode}Mode_{demoConfig["errorSizes"]}_{weightMode}Weight"+outext
     videoPath=outdir/videoname
     videoPath.mkdir(parents=True,exist_ok=True)
