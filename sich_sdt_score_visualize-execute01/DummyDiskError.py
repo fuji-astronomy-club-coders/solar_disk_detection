@@ -37,9 +37,28 @@ if __name__ == "__main__":
     if image.shape[2] != 1:
         raise ValueError(f"画像のチャネル数が1ではありません チャネル数:{image.shape[2]}")
 
+    # 太陽円盤を検出
+    diskStat = min2v221(
         readed_img=image, img_name=imagePath.name, img_path=str(imagePath), **min2Config
     )
+    center=diskStat[:2]
+
+    #最大誤差(pix)を計算
+
+    if errorConfig["errorMode"]=="percent":
+        errorPix == []
+        for i,v in enumerate(errorConfig["errorSizes"]):
+            errorPix.append(np.round(center[i])*v*2)
+    else:
+        errorPix=[np.round(v)*2 for v in errorConfig["errorSizes"]]
+
+    cx,cy,r = diskStat
     intcx=np.round(cx)
     intcy=np.round(cy)
     croph, cropw = sampleConfig["cropHW"]
-    cropped = crop_and_pad(img=image, cx=intcx, cy=intcy, crop_h=croph, crop_w=cropw)
+    elderCroph=croph + errorPix[1]
+    elderCropw=cropw + errorPix[0]
+
+    elderpadded = crop_and_pad(img=image, cx=intcx, cy=intcy, crop_h=elderCroph, crop_w=elderCropw)
+
+
