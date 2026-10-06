@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import yaml
 from stdScorePack.MIN2ver2 import MIN2_ignore_sunspots as min2v221
-from stdScorePack.std_score_visualize import crop_and_pad,calculate_hensachi
+from stdScorePack.std_score_visualize import crop_and_pad,calculate_hensachi,create_colormap
 
 if __name__ == "__main__":
     # ===設定の読み込み===
@@ -76,6 +76,7 @@ if __name__ == "__main__":
     # ---統計量計算---
     mean,std,stdScore=calculate_hensachi(frames=frames)
     # ---可視描画---
+    colormap_lut = create_colormap()
 
     # ---動画出力---
 
