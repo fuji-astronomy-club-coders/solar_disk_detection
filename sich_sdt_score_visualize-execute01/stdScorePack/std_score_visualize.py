@@ -11,34 +11,34 @@ import tqdm
 from CSV_frames import save_images_to_csv
 from MIN2ver2 import MIN2_ignore_sunspots
 from samples.zip_operator import get_image_names_from_dir, load_image_from_path_cv2
+if __name__ == "__main__"
+    # 全体
+    OUTPUT_MODE = "VIDEO"  # CSV(0),VIDEO(2),WITH(1)
+    # パラメータ std score
+    INPUT_DIR = "./sun_images"  # 処理対象の画像フォルダ
+    CROP_H = 800  # 抽出する画像サイズ(縦幅)
+    CROP_W = 800  # 抽出する画像サイズ(横幅)
+    OUT_DIR_CSV = "./output_pixels"  # CSV保存先フォルダ
 
-# 全体
-OUTPUT_MODE = "VIDEO"  # CSV(0),VIDEO(2),WITH(1)
-# パラメータ std score
-INPUT_DIR = "./sun_images"  # 処理対象の画像フォルダ
-CROP_H = 800  # 抽出する画像サイズ(縦幅)
-CROP_W = 800  # 抽出する画像サイズ(横幅)
-OUT_DIR_CSV = "./output_pixels"  # CSV保存先フォルダ
-
-# パラメータ colormap
-DEBUG = True  # True: デバッグ情報を表示
-OUTPUT_DIR = r"C:\Users\2025005585\Desktop\python"  # 出力画像の保存先ルートフォルダ
-OUTPUT_NAME = "output_test_sample"  # 保存用フォルダ名（旧：動画ファイル名）
-MEAN_STD_OUTPUT_DIR = (
-    r"C:\Users\2025005585\Desktop\python"  # 平均値と標準偏差の出力画像の保存先フォルダ
-)
-MEAN_IMAGE_NAME = "mean_image"  # 平均値の出力画像のファイル名
-STD_IMAGE_NAME = "std_image"  # 標準偏差の出力画像のファイル名
-IMAGE_EXT = ".png"  # 画像の拡張子
+    # パラメータ colormap
+    DEBUG = True  # True: デバッグ情報を表示
+    OUTPUT_DIR = r"C:\Users\2025005585\Desktop\python"  # 出力画像の保存先ルートフォルダ
+    OUTPUT_NAME = "output_test_sample"  # 保存用フォルダ名（旧：動画ファイル名）
+    MEAN_STD_OUTPUT_DIR = (
+        r"C:\Users\2025005585\Desktop\python"  # 平均値と標準偏差の出力画像の保存先フォルダ
+    )
+    MEAN_IMAGE_NAME = "mean_image"  # 平均値の出力画像のファイル名
+    STD_IMAGE_NAME = "std_image"  # 標準偏差の出力画像のファイル名
+    IMAGE_EXT = ".png"  # 画像の拡張子
 
 
-if os.environ.get("RUN_BY_SUBPROCESS") == "true":
-    print("このスクリプトは subprocess から実行されています。")
-    # 標準入力から流れてきた文字列を一括で読み込む
-    input_data = sys.stdin.read()
+    if os.environ.get("RUN_BY_SUBPROCESS") == "true":
+        print("このスクリプトは subprocess から実行されています。")
+        # 標準入力から流れてきた文字列を一括で読み込む
+        input_data = sys.stdin.read()
 
-    # JSON文字列をPythonの辞書オブジェクトに復元
-    locals().update(json.loads(input_data))
+        # JSON文字列をPythonの辞書オブジェクトに復元
+        locals().update(json.loads(input_data))
 
 
 # 関数
