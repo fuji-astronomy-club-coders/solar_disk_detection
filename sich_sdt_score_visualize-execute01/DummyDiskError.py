@@ -41,23 +41,15 @@ if __name__ == "__main__":
     cx,cy,r = min2v221(
         readed_img=image, img_name=imagePath.name, img_path=str(imagePath), **min2Config
     )
-
-    #最大誤差(pix)を計算
-
-    if demoConfig["mode"]=="percent":
-        errorRange = [np.round(r)*v*2 for v in demoConfig["errorSizes"]]
-    else:
-        errorRange=[np.round(v)*2 for v in demoConfig["errorSizes"]]
-
-    # ---ベース画像の生成---
     intcx=np.round(cx)
     intcy=np.round(cy)
 
-    croph, cropw = sampleConfig["cropHW"]
-    elderCroph=croph + errorRange[1]
-    elderCropw=cropw + errorRange[0]
+    #最大誤差(pix)を計算
+    if demoConfig["mode"]=="percent":
+        errorRange = [np.round(r)*v for v in demoConfig["errorSizes"]]
+    else:
+        errorRange=[np.round(v) for v in demoConfig["errorSizes"]]
 
-    elder= crop_and_pad(img=image, cx=intcx, cy=intcy, crop_h=elderCroph, crop_w=elderCropw)
 
     # ===フレームデータの作成===
     # ---中心座標のリストを作成---
