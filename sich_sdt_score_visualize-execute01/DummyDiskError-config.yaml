@@ -1,1 +1,3 @@
 
+sampleConfig:
+    imagePath: "" #1channel画像のみ対応
