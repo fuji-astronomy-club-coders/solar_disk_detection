@@ -5,12 +5,13 @@ demoConfig:
         - 3 # centerY
     videoLength: 300 #(frame)
     framelate: 30 #(frame/second)
-
+    videoFolder: ""
+    videoExtens: ".mp4"
 sampleConfig:
     cropHW:
         - 600 # h
         - 600 # w
-    imagePath: "" #1channel画像のみ対応
+    imagePath: "" #1channel,16bit画像のみ対応
 min2Config: #ver2.2.1
     n: 10
     light_threshold: 50
