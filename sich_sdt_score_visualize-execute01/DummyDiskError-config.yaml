@@ -3,6 +3,8 @@ demoConfig:
     errorSizes: # 半径補正は偏差値動画にないので再現もなし
         - 3 # centerX
         - 3 # centerY
+    videoLength: 300 #(frame)
+    framelate: 30 #(frame/second)
 
 sampleConfig:
     cropHW:

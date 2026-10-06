@@ -45,7 +45,7 @@ if __name__ == "__main__":
     #最大誤差(pix)を計算
 
     if demoConfig["mode"]=="percent":
-        errorRange == [np.round(r)*v*2 for v in demoConfig["errorSizes"]]
+        errorRange = [np.round(r)*v*2 for v in demoConfig["errorSizes"]]
     else:
         errorRange=[np.round(v)*2 for v in demoConfig["errorSizes"]]
 
@@ -59,4 +59,12 @@ if __name__ == "__main__":
 
     elder= crop_and_pad(img=image, cx=intcx, cy=intcy, crop_h=elderCroph, crop_w=elderCropw)
 
+    # ===フレームデータの作成===
+    # ---中心座標のリストを作成---
+    # 誤差にウェイトをつけるならここ
+    # ---中心座標をもとに全フレームを生成---
+    # ===動画出力===
+    # ---統計量計算---
+    # ---可視描画---
+    # ---動画出力---
 
