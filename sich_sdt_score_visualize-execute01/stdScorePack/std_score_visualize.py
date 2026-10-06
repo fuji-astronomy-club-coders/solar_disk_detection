@@ -11,35 +11,6 @@ import tqdm
 from CSV_frames import save_images_to_csv
 from MIN2ver2 import MIN2_ignore_sunspots
 from samples.zip_operator import get_image_names_from_dir, load_image_from_path_cv2
-if __name__ == "__main__"
-    # 全体
-    OUTPUT_MODE = "VIDEO"  # CSV(0),VIDEO(2),WITH(1)
-    # パラメータ std score
-    INPUT_DIR = "./sun_images"  # 処理対象の画像フォルダ
-    CROP_H = 800  # 抽出する画像サイズ(縦幅)
-    CROP_W = 800  # 抽出する画像サイズ(横幅)
-    OUT_DIR_CSV = "./output_pixels"  # CSV保存先フォルダ
-
-    # パラメータ colormap
-    DEBUG = True  # True: デバッグ情報を表示
-    OUTPUT_DIR = r"C:\Users\2025005585\Desktop\python"  # 出力画像の保存先ルートフォルダ
-    OUTPUT_NAME = "output_test_sample"  # 保存用フォルダ名（旧：動画ファイル名）
-    MEAN_STD_OUTPUT_DIR = (
-        r"C:\Users\2025005585\Desktop\python"  # 平均値と標準偏差の出力画像の保存先フォルダ
-    )
-    MEAN_IMAGE_NAME = "mean_image"  # 平均値の出力画像のファイル名
-    STD_IMAGE_NAME = "std_image"  # 標準偏差の出力画像のファイル名
-    IMAGE_EXT = ".png"  # 画像の拡張子
-
-
-    if os.environ.get("RUN_BY_SUBPROCESS") == "true":
-        print("このスクリプトは subprocess から実行されています。")
-        # 標準入力から流れてきた文字列を一括で読み込む
-        input_data = sys.stdin.read()
-
-        # JSON文字列をPythonの辞書オブジェクトに復元
-        locals().update(json.loads(input_data))
-
 
 # 関数
 def create_colormap() -> np.ndarray:
@@ -70,7 +41,7 @@ def create_colormap() -> np.ndarray:
     return lut
 
 
-def normalize_image(image:np.ndarray) -> np.ndarray:
+def normalize_image(image: np.ndarray) -> np.ndarray:
     """
     画像を50〜100に正規化する
 
@@ -91,7 +62,7 @@ def normalize_image(image:np.ndarray) -> np.ndarray:
     return normalized.astype(np.uint8)
 
 
-def save_statistics_image(image:np.ndarray, filename:str|Path) -> None:
+def save_statistics_image(image: np.ndarray, filename: str | Path) -> None:
     """meanやstdを正規化してカラーマップ画像として保存"""
     # 0〜100に正規化
     normalized_image = normalize_image(image)
@@ -150,7 +121,7 @@ def extract_sun_mini(dir_path: str, h_size: int, w_size: int) -> tuple[np.ndarra
     """
     print(f"---画像の読み込みと切り抜き処理を開始:{dir_path}---")
     # 画像ファイルのみ1000枚取得
-    image_names = get_image_names_from_dir(directory_path=dir_path,extensions=["*.tiff"])
+    image_names = get_image_names_from_dir(directory_path=dir_path, extensions=["*.tiff"])
     frames = []
     min2_centers = []
     # tqdmによる進捗表示
@@ -175,7 +146,7 @@ def extract_sun_mini(dir_path: str, h_size: int, w_size: int) -> tuple[np.ndarra
     return np.array(frames), np.array(min2_centers)
 
 
-def calculate_hensachi(frames: np.ndarray)->tuple[np.ndarray,np.ndarray,np.ndarray]:
+def calculate_hensachi(frames: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """平均画像・標準偏差画像・偏差値画像を計算する。"""
     # 平均画像
     mean = np.mean(frames, axis=0)
@@ -190,9 +161,36 @@ def calculate_hensachi(frames: np.ndarray)->tuple[np.ndarray,np.ndarray,np.ndarr
 
 
 # --- 実行とCSV保存（1フレームずつピクセル保存） ---
-if __name__ == "__main__":
+if __name__ == "__main__":    # 全体
+    OUTPUT_MODE = "VIDEO"  # CSV(0),VIDEO(2),WITH(1)
+    # パラメータ std score
+    INPUT_DIR = "./sun_images"  # 処理対象の画像フォルダ
+    CROP_H = 800  # 抽出する画像サイズ(縦幅)
+    CROP_W = 800  # 抽出する画像サイズ(横幅)
+    OUT_DIR_CSV = "./output_pixels"  # CSV保存先フォルダ
+
+    # パラメータ colormap
+    DEBUG = True  # True: デバッグ情報を表示
+    OUTPUT_DIR = r"C:\Users\2025005585\Desktop\python"  # 出力画像の保存先ルートフォルダ
+    OUTPUT_NAME = "output_test_sample"  # 保存用フォルダ名（旧：動画ファイル名）
+    MEAN_STD_OUTPUT_DIR = (
+        r"C:\Users\2025005585\Desktop\python"  # 平均値と標準偏差の出力画像の保存先フォルダ
+    )
+    MEAN_IMAGE_NAME = "mean_image"  # 平均値の出力画像のファイル名
+    STD_IMAGE_NAME = "std_image"  # 標準偏差の出力画像のファイル名
+    IMAGE_EXT = ".png"  # 画像の拡張子
+
+    if os.environ.get("RUN_BY_SUBPROCESS") == "true":
+        print("このスクリプトは subprocess から実行されています。")
+        # 標準入力から流れてきた文字列を一括で読み込む
+        input_data = sys.stdin.read()
+
+        # JSON文字列をPythonの辞書オブジェクトに復元
+        locals().update(json.loads(input_data))
+
+
     # 保存先フォルダの作成
-    OUTPUT_DIR=Path(OUTPUT_DIR)
+    OUTPUT_DIR = Path(OUTPUT_DIR)
     OUT_DIR_CSV = Path(OUT_DIR_CSV)
     OUT_DIR_CSV.mkdir(parents=True)
 
@@ -269,7 +267,7 @@ if __name__ == "__main__":
 
         # =================== フォルダ作成と画像保存 ===================
         # 動画名(OUTPUT_NAME)と同じ名前のフォルダを作成
-        frame_output_dir = OUTPUT_DIR/ OUTPUT_NAME
+        frame_output_dir = OUTPUT_DIR / OUTPUT_NAME
         frame_output_dir.mkdir(parents=True)
         Path(frame_output_dir).mkdir(parents=True, exist_ok=True)
 
@@ -287,7 +285,7 @@ if __name__ == "__main__":
 
             # 画像ファイル名を設定 (例: frame_0000.png, frame_0001.png ...)
             frame_filename = f"frame_{i:04d}{IMAGE_EXT}"
-            frame_filepath = frame_output_dir/ frame_filename
+            frame_filepath = frame_output_dir / frame_filename
 
             # 画像保存
             cv2.imwrite(frame_filepath, color_mapped_frame)
@@ -304,7 +302,7 @@ if __name__ == "__main__":
         # 標準偏差画像を保存
         save_statistics_image(
             std,
-            Path(MEAN_STD_OUTPUT_DIR)/ (STD_IMAGE_NAME + IMAGE_EXT),
+            Path(MEAN_STD_OUTPUT_DIR) / (STD_IMAGE_NAME + IMAGE_EXT),
         )
 
         print("平均値画像と標準偏差画像の出力が完了しました")

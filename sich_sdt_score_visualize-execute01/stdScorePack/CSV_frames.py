@@ -1,11 +1,15 @@
 """csv形式の画像の保存を読み込み"""
+
 from pathlib import Path
 
 import numpy as np
 
-__versio__ =1.2 #saveにdelimiterとfmtを追加
+__versio__ = 1.2  # saveにdelimiterとfmtを追加
 
-def save_images_to_csv(file_path: str, images_3d: np.ndarray,delimiter:str=",",fmt:str="%d") -> None:
+
+def save_images_to_csv(
+    file_path: str, images_3d: np.ndarray, delimiter: str = ",", fmt: str = "%d"
+) -> None:
     """
     3次元の画像配列（枚数, 縦, 横）を、形状情報をヘッダーに含めてCSVに保存する。
 
@@ -17,9 +21,7 @@ def save_images_to_csv(file_path: str, images_3d: np.ndarray,delimiter:str=",",f
         保存する3次元のNumPy配列 (モノクロ画像を想定)
     """
     if images_3d.ndim != 3:
-        raise ValueError(
-            f"エラー: 3次元配列を指定してください。現在の次元数: {images_3d.ndim}"
-        )
+        raise ValueError(f"エラー: 3次元配列を指定してください。現在の次元数: {images_3d.ndim}")
 
     # 1. 2次元に変形 (枚数, 縦 * 横)
     num_images = images_3d.shape[0]
@@ -39,7 +41,7 @@ def save_images_to_csv(file_path: str, images_3d: np.ndarray,delimiter:str=",",f
     )
 
 
-def load_images_from_csv(file_path: str|Path, dtype:np.dtype[np.uint] = np.uint8) -> np.ndarray:  # pyright: ignore[reportArgumentType]
+def load_images_from_csv(file_path: str | Path, dtype: np.dtype[np.uint] = np.uint8) -> np.ndarray:  # pyright: ignore[reportArgumentType]
     """
     形状情報がヘッダーに記述されたCSVから、3次元の画像配列を復元して読み込む。
 
@@ -55,7 +57,7 @@ def load_images_from_csv(file_path: str|Path, dtype:np.dtype[np.uint] = np.uint8
     np.ndarray
         復元された3次元のNumPy配列
     """
-    file_path =Path(file_path)
+    file_path = Path(file_path)
     if not file_path.exists():
         raise FileNotFoundError(f"エラー: ファイルが見つかりません ({file_path})")
 

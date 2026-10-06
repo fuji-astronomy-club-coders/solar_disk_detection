@@ -9,7 +9,7 @@ import numpy as np
 """
 ZIPファイル操作用のユーティリティ関数
 """
-__version__ = 2.1 # 非zip用完全置換関数の作製
+__version__ = 2.1  # 非zip用完全置換関数の作製
 
 
 def load_image_from_path_cv2(dirpath: str, image_name: str) -> np.ndarray | None:

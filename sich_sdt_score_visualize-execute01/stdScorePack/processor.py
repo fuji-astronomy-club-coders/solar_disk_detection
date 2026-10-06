@@ -131,7 +131,6 @@ for i, base_path in enumerate(input_dirs[:]):
                 proc.stdin.close()
 
             if proc.stdout is not None:
-
                 # 子プロセスの出力を1行ずつ読み込んで処理
                 for line in proc.stdout:
                     clean_line = line.strip()
