@@ -1,12 +1,12 @@
 """偏差値動画にて確認された対角線状の青と赤のピクセル群が検出円の誤差に起因することを検証するために誤差を再現した動画を生成する実行ファイル"""
 
 from pathlib import Path
+from random import randint
 
 import cv2
 import numpy as np
 import yaml
 from stdScorePack.MIN2ver2 import MIN2_ignore_sunspots as min2v221
-from stdScorePack.std_score_visualize import crop_and_pad
 
 if __name__ == "__main__":
     # ===設定の読み込み===
@@ -54,6 +54,12 @@ if __name__ == "__main__":
     # ===フレームデータの作成===
     # ---中心座標のリストを作成---
     # 誤差にウェイトをつけるならここ
+    diffs=[]
+    xmax,ymax=errorRange
+    for f in range(demoConfig["videolength"]):
+        xdiff = randint(-xmax, xmax)
+        ydiff = randint(-ymax, ymax)
+        diffs.append([xdiff,ydiff])
     # ---中心座標をもとに全フレームを生成---
     # ===動画出力===
     # ---統計量計算---
