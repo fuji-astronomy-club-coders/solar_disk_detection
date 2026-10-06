@@ -21,7 +21,7 @@ if __name__ == "__main__":
 
     # --- 設定値のチェック ---
     # - demoConfig
-    modes=["percent","abusolute"]
+    modes=["percent","absolute"]
     if demoConfig["mode"] not in modes:
         raise ValueError("modes is unknown value")
 
@@ -38,22 +38,18 @@ if __name__ == "__main__":
         raise ValueError(f"画像のチャネル数が1ではありません チャネル数:{image.shape[2]}")
 
     # 太陽円盤を検出
-    diskStat = min2v221(
+    cx,cy,r = min2v221(
         readed_img=image, img_name=imagePath.name, img_path=str(imagePath), **min2Config
     )
-    center=diskStat[:2]
 
     #最大誤差(pix)を計算
 
     if demoConfig["mode"]=="percent":
-        errorRange == []
-        for i,v in enumerate(demoConfig["errorSizes"]):
-            errorRange.append(np.round(center[i])*v*2)
+        errorRange == [np.round(r)*v*2 for v in demoConfig["errorSizes"]]
     else:
         errorRange=[np.round(v)*2 for v in demoConfig["errorSizes"]]
 
     # ---ベース画像の生成---
-    cx,cy,r = diskStat
     intcx=np.round(cx)
     intcy=np.round(cy)
 

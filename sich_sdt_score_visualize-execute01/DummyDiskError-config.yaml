@@ -1,5 +1,5 @@
 demoConfig:
-    mode: percent # 'abusolute' or 'percent'
+    mode: absolute # 'absolute' or 'percent' percentは半径に対する割合
     errorSizes: # 半径補正は偏差値動画にないので再現もなし
         - 3 # centerX
         - 3 # centerY
