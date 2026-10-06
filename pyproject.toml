@@ -21,7 +21,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["min2"]
+packages = ["min2","sich_sdt_score_visualize-execute01"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
@@ -65,7 +65,8 @@ convention = "numpy"
 quote-style = "double"
 [tool.basedpyright]
 include = [
-    "min2",  
+    "min2",
+    "sich_sdt_score_visualize-execute01"
     ]   
 exclude = [
     "**/__pycache__",
@@ -73,7 +74,9 @@ exclude = [
     "venv",
     "build",
     "dist",
-    "sich_sdt_score_visualize-execute01/sich_sdt_score_visualize-execute01/MIN2ver2.py"
+    ]
+ignore = [
+    "sich_sdt_score_visualize-execute01/**",
 ]
 typeCheckingMode = "standard"
 pythonVersion = "3.13"
