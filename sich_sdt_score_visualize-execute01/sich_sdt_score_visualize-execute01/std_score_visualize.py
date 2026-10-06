@@ -1,12 +1,13 @@
-import os
-import cv2
-import tqdm
-import sys
-import numpy as np
-import glob
+"""シンチレーションの値の算出に準じて、各フレーム・各ピクセルの明るさの偏差値を算出・可視化する"""
+
 import json
+import os
+import sys
 from pathlib import Path
 
+import cv2
+import numpy as np
+import tqdm
 from CSV_frames import save_images_to_csv
 from MIN2ver2 import MIN2_ignore_sunspots
 from samples.zip_operator import get_image_names_from_dir, load_image_from_path_cv2
@@ -41,8 +42,8 @@ if os.environ.get("RUN_BY_SUBPROCESS") == "true":
 
 
 # 関数
-def create_colormap():
-    # 256要素を持つLUTを作成(偏差値0~100に対応する色を設定)
+def create_colormap() -> np.ndarray:
+    """256要素を持つLUTを作成(偏差値0~100に対応する色を設定)"""
     lut = np.zeros((256, 1, 3), dtype=np.uint8)
     # 偏差値50未満は濃い青から白へ段階的に変化
     lut[0:5] = [100, 0, 0]
@@ -69,15 +70,15 @@ def create_colormap():
     return lut
 
 
-def normalize_image(image):
+def normalize_image(image:np.ndarray) -> np.ndarray:
     """
     画像を50〜100に正規化する
+
     image:
         meanやstdなどの2次元画像
     Returns:
         50〜100のuint8画像
     """
-
     img_min = image.min()
     img_max = image.max()
 
@@ -90,11 +91,8 @@ def normalize_image(image):
     return normalized.astype(np.uint8)
 
 
-def save_statistics_image(image, filename):
-    """
-    meanやstdを正規化してカラーマップ画像として保存
-    """
-
+def save_statistics_image(image:np.ndarray, filename:str|Path) -> None:
+    """meanやstdを正規化してカラーマップ画像として保存"""
     # 0〜100に正規化
     normalized_image = normalize_image(image)
 
@@ -108,9 +106,8 @@ def save_statistics_image(image, filename):
     cv2.imwrite(filename, color_mapped_image)
 
 
-def crop_and_pad(
-    img: np.ndarray, cx: int, cy: int, crop_h: int, crop_w: int
-) -> np.ndarray:
+def crop_and_pad(img: np.ndarray, cx: int, cy: int, crop_h: int, crop_w: int) -> np.ndarray:
+    """画像の太陽周辺を正方形に切り抜くトリミング"""
     # 切り抜きたい理想の範囲（画面外にはみ出す可能性あり）
     h, w = img.shape
     crop_h = int(crop_h / 2)
@@ -130,17 +127,14 @@ def crop_and_pad(
     cropped = img[crop_y1:crop_y2, crop_x1:crop_x2]
 
     # はみ出していた部分を黒色（0）で埋めて、常にsize x size にする
-    padded = cv2.copyMakeBorder(
-        cropped, top, bottom, left, right, cv2.BORDER_CONSTANT, value=0
-    )
+    padded = cv2.copyMakeBorder(cropped, top, bottom, left, right, cv2.BORDER_CONSTANT, value=0)
 
     return padded
 
 
-def extract_sun_mini(
-    dir_path: str, h_size: int, w_size: int
-) -> tuple[np.ndarray, np.ndarray]:
+def extract_sun_mini(dir_path: str, h_size: int, w_size: int) -> tuple[np.ndarray, np.ndarray]:
     """フォルダ内の太陽画像から太陽中心を算出し、指定サイズで切りぬいた画像配列を返します。
+
     画面端にかかる場合は、足りない部分を黒く塗りつぶします。
 
     Args:
@@ -148,15 +142,15 @@ def extract_sun_mini(
         h_size(int):切りぬく長方形の縦幅
         w_size(int):切りぬく長方形の横幅
 
-    Returns:
+    Returns
+    -------
         tuple[np.ndarray, np.ndarray]:
             - 切りぬかれた画像の3次元配列（N,h_size,w_size)
             - 各画像の中心座標配列（N,2）
     """
-
     print(f"---画像の読み込みと切り抜き処理を開始:{dir_path}---")
     # 画像ファイルのみ1000枚取得
-    image_names = get_image_names_from_dir(dir_path)
+    image_names = get_image_names_from_dir(directory_path=dir_path,extensions=["*.tiff"])
     frames = []
     min2_centers = []
     # tqdmによる進捗表示
@@ -166,7 +160,7 @@ def extract_sun_mini(
         if img is None:
             continue
         try:
-            cx, cy, r = MIN2_ignore_sunspots(img, show=False, debug=False)
+            cx, cy, _ = MIN2_ignore_sunspots(img, show=False, debug=False)
         except Exception:
             continue
 
@@ -181,9 +175,8 @@ def extract_sun_mini(
     return np.array(frames), np.array(min2_centers)
 
 
-def calculate_hensachi(frames: np.ndarray):
+def calculate_hensachi(frames: np.ndarray)->tuple[np.ndarray,np.ndarray,np.ndarray]:
     """平均画像・標準偏差画像・偏差値画像を計算する。"""
-
     # 平均画像
     mean = np.mean(frames, axis=0)
 
@@ -193,13 +186,15 @@ def calculate_hensachi(frames: np.ndarray):
     # 偏差値画像
     hensachi = np.where(std == 0, 50, 50 + 10 * (frames - mean) / std)
 
-    return mean, std, hensachi
+    return (mean, std, hensachi)
 
 
 # --- 実行とCSV保存（1フレームずつピクセル保存） ---
 if __name__ == "__main__":
     # 保存先フォルダの作成
-    os.makedirs(OUT_DIR_CSV, exist_ok=True)
+    OUTPUT_DIR=Path(OUTPUT_DIR)
+    OUT_DIR_CSV = Path(OUT_DIR_CSV)
+    OUT_DIR_CSV.mkdir(parents=True)
 
     print(f"\n--- 画像ファイルの読み込み開始: {INPUT_DIR} ---")
 
@@ -220,8 +215,8 @@ if __name__ == "__main__":
             # 偏差値画像をCSVとして保存
             print("\n--- 偏差値CSV保存処理を開始 ---")
 
-            HENSACHI_DIR = "./output_hensachi"
-            os.makedirs(HENSACHI_DIR, exist_ok=True)
+            HENSACHI_DIR = Path("./output_hensachi").absolute()
+            HENSACHI_DIR.mkdir(parents=True)
 
             cropped_hensachi = []
             for i, frame in enumerate(tqdm.tqdm(hensachi, desc="Saving Hensachi CSVs")):
@@ -258,7 +253,7 @@ if __name__ == "__main__":
         data = hensachi
 
         # データ形状からフレーム数・画像サイズの取得
-        n_frames, height, width,_ = data.shape
+        n_frames, height, width, _ = data.shape
 
         # 入力データの確認(デバッグ表示)
         if DEBUG:
@@ -274,10 +269,10 @@ if __name__ == "__main__":
 
         # =================== フォルダ作成と画像保存 ===================
         # 動画名(OUTPUT_NAME)と同じ名前のフォルダを作成
-        frame_output_dir = os.path.join(OUTPUT_DIR, OUTPUT_NAME)
-        os.makedirs(frame_output_dir, exist_ok=True)
+        frame_output_dir = OUTPUT_DIR/ OUTPUT_NAME
+        frame_output_dir.mkdir(parents=True)
         Path(frame_output_dir).mkdir(parents=True, exist_ok=True)
-        
+
         print(f"\n--- 画像フレームの保存処理を開始: {frame_output_dir} ---")
 
         # 1フレームずつ取り出し、LUTを適用して画像として保存
@@ -286,15 +281,13 @@ if __name__ == "__main__":
             # 偏差値を0〜100に収めてuint8 型に変換
             clipped_frame = np.clip(frame, 0, 100).astype(np.uint8)
             # LUTを適用するため、グレースケール画像を3チャンネル(BGR)画像へ変換
-            three_channel_frame = cv2.cvtColor(
-                clipped_frame, cv2.COLOR_GRAY2BGR
-            )
+            three_channel_frame = cv2.cvtColor(clipped_frame, cv2.COLOR_GRAY2BGR)
             # LUTを適用し、偏差値を対応する色へ変換
             color_mapped_frame = cv2.LUT(three_channel_frame, colormap_lut)
 
             # 画像ファイル名を設定 (例: frame_0000.png, frame_0001.png ...)
             frame_filename = f"frame_{i:04d}{IMAGE_EXT}"
-            frame_filepath = os.path.join(frame_output_dir, frame_filename)
+            frame_filepath = frame_output_dir/ frame_filename
 
             # 画像保存
             cv2.imwrite(frame_filepath, color_mapped_frame)
@@ -305,13 +298,13 @@ if __name__ == "__main__":
         # 平均値画像を保存
         save_statistics_image(
             mean,
-            os.path.join(MEAN_STD_OUTPUT_DIR, MEAN_IMAGE_NAME + IMAGE_EXT),
+            Path(MEAN_STD_OUTPUT_DIR) / (MEAN_IMAGE_NAME + IMAGE_EXT),
         )
 
         # 標準偏差画像を保存
         save_statistics_image(
             std,
-            os.path.join(MEAN_STD_OUTPUT_DIR, STD_IMAGE_NAME + IMAGE_EXT),
+            Path(MEAN_STD_OUTPUT_DIR)/ (STD_IMAGE_NAME + IMAGE_EXT),
         )
 
         print("平均値画像と標準偏差画像の出力が完了しました")

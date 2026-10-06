@@ -32,6 +32,7 @@ exclude = [
     "venv",
     "build",
     "dist",
+    "./sich_sdt_score_visualize-execute01/sich_sdt_score_visualize-execute01/MIN2ver2.py"
 ]
 
 [tool.ruff.lint]
@@ -72,6 +73,7 @@ exclude = [
     "venv",
     "build",
     "dist",
+    "sich_sdt_score_visualize-execute01/sich_sdt_score_visualize-execute01/MIN2ver2.py"
 ]
 typeCheckingMode = "standard"
 pythonVersion = "3.13"
