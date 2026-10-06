@@ -79,4 +79,9 @@ if __name__ == "__main__":
     colormap_lut = create_colormap()
 
     # ---動画出力---
-
+    # 動画パスの設定
+    outdir=Path(demoConfig["videoFolder"])
+    outext=demoConfig["videoExtens"]
+    videoname=imagePath.name+f"_{mode}Mode_{demoConfig["errorSizes"]}_{weightMode}Weight"+outext
+    videoPath=outdir/videoname
+    videoPath.mkdir(parents=True,exist_ok=True)
