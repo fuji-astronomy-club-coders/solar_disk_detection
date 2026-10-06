@@ -61,6 +61,11 @@ if __name__ == "__main__":
         ydiff = randint(-ymax, ymax)
         diffs.append([xdiff,ydiff])
     # ---中心座標をもとに全フレームを生成---
+    frames=[]
+    croph,cropw=sampleConfig["cropHW"]
+    for xdiff,ydiff in diffs:
+        frames.append(crop_and_pad(img=image,cx=intcx+xdiff,cy=intcy+ydiff,crop_h=croph,crop_w=cropw))
+    frames=np.ndarray(frames)
     # ===動画出力===
     # ---統計量計算---
     # ---可視描画---
