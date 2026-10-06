@@ -1,3 +1,9 @@
+errorConfig:
+    errorMode: percent # 'abusolute' or 'percent'
+    errorSizes:
+        - 3 # centerX
+        - 3 # centerY
+        - 3 # radius
 
 sampleConfig:
     cropHW:

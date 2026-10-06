@@ -9,7 +9,7 @@ from stdScorePack.MIN2ver2 import MIN2_ignore_sunspots as min2v221
 from stdScorePack.std_score_visualize import crop_and_pad
 
 if __name__ == "__main__":
-    # ---設定の読み込み---
+    # ===設定の読み込み===
     config_name = "DummyDiskError-config.yaml"
     config_path = Path(__file__).parent / config_name
 
@@ -17,7 +17,15 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         sampleConfig = config["sampleConfig"]
         min2Config = config["min2Config"]
-    # ---画像の読み込み---
+        errorConfig = config["errorConfig"]
+
+    # --- 設定値のチェック ---
+    # - errorConfig
+    errorModes=["percent","abusolute"]
+    if errorConfig["errorMode"] not in errorModes:
+        raise ValueError("errorModes is unknown value")
+
+    # ===画像の読み込み===
     imagePath = Path(sampleConfig["imagePath"])
     if not imagePath.exists():
         raise FileNotFoundError(f"存在しないファイルです:{imagePath}")
@@ -29,8 +37,6 @@ if __name__ == "__main__":
     if image.shape[2] != 1:
         raise ValueError(f"画像のチャネル数が1ではありません チャネル数:{image.shape[2]}")
 
-    # ---画像処理・解析---
-    (cx, cy, r) = min2v221(
         readed_img=image, img_name=imagePath.name, img_path=str(imagePath), **min2Config
     )
     intcx=np.round(cx)
