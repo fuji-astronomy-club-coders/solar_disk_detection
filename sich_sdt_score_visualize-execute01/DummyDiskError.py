@@ -55,13 +55,17 @@ if __name__ == "__main__":
 
     # ===フレームデータの作成===
     # ---中心座標のリストを作成---
+    weightMode=demoConfig["weight"]
     # 誤差にウェイトをつけるならここ
     diffs=[]
     xmax,ymax=errorRange
-    for f in range(demoConfig["videolength"]):
-        xdiff = randint(-xmax, xmax)
-        ydiff = randint(-ymax, ymax)
-        diffs.append([xdiff,ydiff])
+    if weightMode == "No":
+        for f in range(demoConfig["videolength"]):
+            xdiff = randint(-xmax, xmax)
+            ydiff = randint(-ymax, ymax)
+            diffs.append([xdiff,ydiff])
+    else:
+        raise ValueError(f"unknown weight mode:{weightMode}")
     # ---中心座標をもとに全フレームを生成---
     frames=[]
     croph,cropw=sampleConfig["cropHW"]
