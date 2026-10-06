@@ -17,13 +17,13 @@ if __name__ == "__main__":
         config = yaml.safe_load(file)
         sampleConfig = config["sampleConfig"]
         min2Config = config["min2Config"]
-        errorConfig = config["errorConfig"]
+        demoConfig = config["demoConfig"]
 
     # --- 設定値のチェック ---
-    # - errorConfig
-    errorModes=["percent","abusolute"]
-    if errorConfig["errorMode"] not in errorModes:
-        raise ValueError("errorModes is unknown value")
+    # - demoConfig
+    modes=["percent","abusolute"]
+    if demoConfig["mode"] not in modes:
+        raise ValueError("modes is unknown value")
 
     # ===画像の読み込み===
     imagePath = Path(sampleConfig["imagePath"])
@@ -45,20 +45,22 @@ if __name__ == "__main__":
 
     #最大誤差(pix)を計算
 
-    if errorConfig["errorMode"]=="percent":
-        errorPix == []
-        for i,v in enumerate(errorConfig["errorSizes"]):
-            errorPix.append(np.round(center[i])*v*2)
+    if demoConfig["mode"]=="percent":
+        errorRange == []
+        for i,v in enumerate(demoConfig["errorSizes"]):
+            errorRange.append(np.round(center[i])*v*2)
     else:
-        errorPix=[np.round(v)*2 for v in errorConfig["errorSizes"]]
+        errorRange=[np.round(v)*2 for v in demoConfig["errorSizes"]]
 
+    # ---ベース画像の生成---
     cx,cy,r = diskStat
     intcx=np.round(cx)
     intcy=np.round(cy)
-    croph, cropw = sampleConfig["cropHW"]
-    elderCroph=croph + errorPix[1]
-    elderCropw=cropw + errorPix[0]
 
-    elderpadded = crop_and_pad(img=image, cx=intcx, cy=intcy, crop_h=elderCroph, crop_w=elderCropw)
+    croph, cropw = sampleConfig["cropHW"]
+    elderCroph=croph + errorRange[1]
+    elderCropw=cropw + errorRange[0]
+
+    elder= crop_and_pad(img=image, cx=intcx, cy=intcy, crop_h=elderCroph, crop_w=elderCropw)
 
 

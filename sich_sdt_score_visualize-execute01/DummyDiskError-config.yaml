@@ -1,5 +1,5 @@
-errorConfig:
-    errorMode: percent # 'abusolute' or 'percent'
+demoConfig:
+    mode: percent # 'abusolute' or 'percent'
     errorSizes: # 半径補正は偏差値動画にないので再現もなし
         - 3 # centerX
         - 3 # centerY
