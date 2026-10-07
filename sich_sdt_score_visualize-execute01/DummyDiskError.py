@@ -84,3 +84,35 @@ if __name__ == "__main__":
     outext=".mp4"
     videoname=imagePath.name+f"_{mode}Mode_{demoConfig["errorSizes"]}_{weightMode}Weight"
     videoPath=outdir/(videoname+outext)
+
+    # 出力動画の設定
+    video_writer = cv2.VideoWriter(
+        videoPath,cv2.VideoWriter_fourcc("mp4v"),fileConfig["framelate"],
+        (cropw,croph),
+    )
+
+    # 1フレームずつ取り出し、LUTを適用して動画に書き込む
+    for frame in stdScore:
+        # 偏差値を0〜100に収めてuint8 型に変換
+        clipped_frame = np.clip(frame, 0, 100).astype(np.uint8)
+        # LUTを適用するため、グレースケール画像を3チャンネル(BGR)画像へ変換
+        three_channel_frame = cv2.cvtColor(clipped_frame, cv2.COLOR_GRAY2BGR)
+        # LUTを適用し、偏差値を対応する色へ変換
+        color_mapped_frame = cv2.LUT(three_channel_frame, colormap_lut)
+        # 動画ファイルに1フレーム書き込む
+        video_writer.write(color_mapped_frame)
+
+    video_writer.release()
+    print("動画の作成が完了しました")
+
+    # =============平均と標準偏差の画像作成用=============
+    imgdir="image" #TASK 代表値フォルダ 名前
+    # 平均値画像を保存
+    meanImgName="MEAN"+videoname+".png"
+    save_statistics_image(mean,outdir\imgdir\meanImgName)
+
+    # 標準偏差画像を保存
+    stdImgName="STD"+videoname+".png"
+    save_statistics_image(std,outdir\imgdir\stdImageName)
+
+    print("平均値画像と標準偏差画像の出力が完了しました")
