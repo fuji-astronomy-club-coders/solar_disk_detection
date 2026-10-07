@@ -27,8 +27,8 @@ if __name__ == "__main__":
 
     # --- 設定値のチェック ---
     # - demoConfig
-    known_modes=["percent","absolute"]
-    mode=demoConfig["mode"]
+    known_modes = ["percent", "absolute"]
+    mode = demoConfig["mode"]
     if mode not in known_modes:
         raise ValueError("modes is unknown value")
     # ===画像の読み込み===
@@ -39,61 +39,64 @@ if __name__ == "__main__":
     if image is None:
         raise ValueError(f"ファイルの読み込みに失敗しました:{imagePath}")
     else:
-        image=np.array(image)
+        image = np.array(image)
     if image.shape[2] != 1:
         raise ValueError(f"画像のチャネル数が1ではありません チャネル数:{image.shape[2]}")
 
     # 太陽円盤を検出
-    cx,cy,r = min2v221(
+    cx, cy, r = min2v221(
         readed_img=image, img_name=imagePath.name, img_path=str(imagePath), **min2Config
     )
-    intcx=np.round(cx)
-    intcy=np.round(cy)
+    intcx = np.round(cx)
+    intcy = np.round(cy)
 
-    #最大誤差(pix)を計算
-    if mode=="percent":
-        errorRange = [np.round(r)*v for v in demoConfig["errorSizes"]]
+    # 最大誤差(pix)を計算
+    if mode == "percent":
+        errorRange = [np.round(r) * v for v in demoConfig["errorSizes"]]
     else:
-        errorRange=[np.round(v) for v in demoConfig["errorSizes"]]
-
+        errorRange = [np.round(v) for v in demoConfig["errorSizes"]]
 
     # ===フレームデータの作成===
     # ---中心座標のリストを作成---
-    weightMode=demoConfig["weight"]
+    weightMode = demoConfig["weight"]
     # 誤差にウェイトをつけるならここ
-    diffs=[]
-    xmax,ymax=errorRange
+    diffs = []
+    xmax, ymax = errorRange
     if weightMode == "No":
         for _ in range(fileConfig["videolength"]):
             xdiff = randint(-xmax, xmax)
             ydiff = randint(-ymax, ymax)
-            diffs.append([xdiff,ydiff])
+            diffs.append([xdiff, ydiff])
     else:
         raise ValueError(f"unknown weight mode:{weightMode}")
     # ---中心座標をもとに全フレームを生成---
-    frames=[]
-    croph,cropw=demoConfig["cropHW"]
-    for xdiff,ydiff in diffs:
-        frames.append(crop_and_pad(img=image,cx=intcx+xdiff,cy=intcy+ydiff,crop_h=croph,crop_w=cropw))
-    frames=np.ndarray(frames)
+    frames = []
+    croph, cropw = demoConfig["cropHW"]
+    for xdiff, ydiff in diffs:
+        frames.append(
+            crop_and_pad(img=image, cx=intcx + xdiff, cy=intcy + ydiff, crop_h=croph, crop_w=cropw)
+        )
+    frames = np.ndarray(frames)
     # ===動画出力===
     # ---統計量計算---
-    mean,std,stdScore=calculate_hensachi(frames=frames)
+    mean, std, stdScore = calculate_hensachi(frames=frames)
     # ---可視描画---
     colormap_lut = create_colormap()
 
     # ---動画出力---
     # 動画パスの設定
-    outdir=Path(fileConfig["videoFolder"])
-    outdir.mkdir(parents=True,exist_ok=True)
-    outext=".mp4"
-    videoname=imagePath.name+f"_{mode}Mode_{demoConfig["errorSizes"]}_{weightMode}Weight"
-    videoPath=outdir/(videoname+outext)
+    outdir = Path(fileConfig["videoFolder"])
+    outdir.mkdir(parents=True, exist_ok=True)
+    outext = ".mp4"
+    videoname = imagePath.name + f"_{mode}Mode_{demoConfig['errorSizes']}_{weightMode}Weight"
+    videoPath = outdir / (videoname + outext)
 
     # 出力動画の設定
     video_writer = cv2.VideoWriter(
-        videoPath,cv2.VideoWriter_fourcc("mp4v"),fileConfig["framelate"],#pyright:ignore [reportAttributeAccessIssue]
-        (cropw,croph),
+        videoPath,
+        cv2.VideoWriter_fourcc("mp4v"),
+        fileConfig["framelate"],  # pyright:ignore [reportAttributeAccessIssue]
+        (cropw, croph),
     )
 
     # 1フレームずつ取り出し、LUTを適用して動画に書き込む
@@ -111,14 +114,14 @@ if __name__ == "__main__":
     print("動画の作成が完了しました")
 
     # =============平均と標準偏差の画像作成用=============
-    imgdir=outdir/"image"
+    imgdir = outdir / "image"
     imgdir.mkdir(exist_ok=True)
     # 平均値画像を保存
-    meanImgPath=imgdir/("MEAN"+videoname+".png")
-    save_statistics_image(mean,meanImgPath)
+    meanImgPath = imgdir / ("MEAN" + videoname + ".png")
+    save_statistics_image(mean, meanImgPath)
 
     # 標準偏差画像を保存
-    stdImgPath=imgdir/("STD"+videoname+".png")
-    save_statistics_image(std,stdImgPath)
+    stdImgPath = imgdir / ("STD" + videoname + ".png")
+    save_statistics_image(std, stdImgPath)
 
     print("平均値画像と標準偏差画像の出力が完了しました")
