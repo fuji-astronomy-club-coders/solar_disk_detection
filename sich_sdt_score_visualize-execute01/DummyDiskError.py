@@ -111,13 +111,14 @@ if __name__ == "__main__":
     print("動画の作成が完了しました")
 
     # =============平均と標準偏差の画像作成用=============
-    imgdir="image"
+    imgdir=outdir/"image"
+    imgdir.mkdir(exist_ok=True)
     # 平均値画像を保存
-    meanImgPath=outdir/imgdir/("MEAN"+videoname+".png")
+    meanImgPath=imgdir/("MEAN"+videoname+".png")
     save_statistics_image(mean,meanImgPath)
 
     # 標準偏差画像を保存
-    stdImgPath=outdir/imgdir/("STD"+videoname+".png")
+    stdImgPath=imgdir/("STD"+videoname+".png")
     save_statistics_image(std,stdImgPath)
 
     print("平均値画像と標準偏差画像の出力が完了しました")
