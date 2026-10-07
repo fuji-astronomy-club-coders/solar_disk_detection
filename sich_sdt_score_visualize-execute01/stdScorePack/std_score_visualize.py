@@ -187,12 +187,8 @@ if __name__ == "__main__":    # 全体
 
         # JSON文字列をPythonの辞書オブジェクトに復元
         locals().update(json.loads(input_data))
-
-
     # 保存先フォルダの作成
-    OUTPUT_DIR = Path(OUTPUT_DIR)
-    OUT_DIR_CSV = Path(OUT_DIR_CSV)
-    OUT_DIR_CSV.mkdir(parents=True)
+    os.makedirs(OUT_DIR_CSV, exist_ok=True)
 
     print(f"\n--- 画像ファイルの読み込み開始: {INPUT_DIR} ---")
 
@@ -213,8 +209,8 @@ if __name__ == "__main__":    # 全体
             # 偏差値画像をCSVとして保存
             print("\n--- 偏差値CSV保存処理を開始 ---")
 
-            HENSACHI_DIR = Path("./output_hensachi").absolute()
-            HENSACHI_DIR.mkdir(parents=True)
+            HENSACHI_DIR = "./output_hensachi"
+            os.makedirs(HENSACHI_DIR, exist_ok=True)
 
             cropped_hensachi = []
             for i, frame in enumerate(tqdm.tqdm(hensachi, desc="Saving Hensachi CSVs")):
@@ -251,7 +247,7 @@ if __name__ == "__main__":    # 全体
         data = hensachi
 
         # データ形状からフレーム数・画像サイズの取得
-        n_frames, height, width, _ = data.shape
+        n_frames, height, width = data.shape
 
         # 入力データの確認(デバッグ表示)
         if DEBUG:
@@ -265,16 +261,17 @@ if __name__ == "__main__":    # 全体
         # カラーマップ作成
         colormap_lut = create_colormap()
 
-        # =================== フォルダ作成と画像保存 ===================
-        # 動画名(OUTPUT_NAME)と同じ名前のフォルダを作成
-        frame_output_dir = OUTPUT_DIR / OUTPUT_NAME
-        frame_output_dir.mkdir(parents=True)
-        Path(frame_output_dir).mkdir(parents=True, exist_ok=True)
+        # ===================動画作成用===================
+        # 出力動画の設定
+        video_writer = cv2.VideoWriter(
+            OUTPUT_DIR + "\\" + OUTPUT_NAME + OUTPUT_EXT,
+            cv2.VideoWriter_fourcc(*VIDEO_CODEC),
+            FPS,
+            (width, height),
+        )
 
-        print(f"\n--- 画像フレームの保存処理を開始: {frame_output_dir} ---")
-
-        # 1フレームずつ取り出し、LUTを適用して画像として保存
-        for i in tqdm.tqdm(range(n_frames), desc="Saving image frames"):
+        # 1フレームずつ取り出し、LUTを適用して動画に書き込む
+        for i in range(n_frames):
             frame = data[i]
             # 偏差値を0〜100に収めてuint8 型に変換
             clipped_frame = np.clip(frame, 0, 100).astype(np.uint8)
@@ -282,27 +279,22 @@ if __name__ == "__main__":    # 全体
             three_channel_frame = cv2.cvtColor(clipped_frame, cv2.COLOR_GRAY2BGR)
             # LUTを適用し、偏差値を対応する色へ変換
             color_mapped_frame = cv2.LUT(three_channel_frame, colormap_lut)
+            # 動画ファイルに1フレーム書き込む
+            video_writer.write(color_mapped_frame)
 
-            # 画像ファイル名を設定 (例: frame_0000.png, frame_0001.png ...)
-            frame_filename = f"frame_{i:04d}{IMAGE_EXT}"
-            frame_filepath = frame_output_dir / frame_filename
-
-            # 画像保存
-            cv2.imwrite(frame_filepath, color_mapped_frame)
-
-        print("画像フレームの保存が完了しました")
+        video_writer.release()
+        print("動画の作成が完了しました")
 
         # =============平均と標準偏差の画像作成用=============
         # 平均値画像を保存
         save_statistics_image(
             mean,
-            Path(MEAN_STD_OUTPUT_DIR) / (MEAN_IMAGE_NAME + IMAGE_EXT),
+            MEAN_STD_OUTPUT_DIR + "\\" + MEAN_IMAGE_NAME + IMAGE_EXT,
         )
 
         # 標準偏差画像を保存
         save_statistics_image(
-            std,
-            Path(MEAN_STD_OUTPUT_DIR) / (STD_IMAGE_NAME + IMAGE_EXT),
+            std, MEAN_STD_OUTPUT_DIR + "\\" + STD_IMAGE_NAME + IMAGE_EXT
         )
 
         print("平均値画像と標準偏差画像の出力が完了しました")
