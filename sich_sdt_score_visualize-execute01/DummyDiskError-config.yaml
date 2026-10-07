@@ -12,7 +12,6 @@ fileConfig:
     videoLength: 300 #(frame)
     framelate: 30 #(frame/second)
     outputFolder: ""
-    outputoExtens: ".mp4"
 min2Config: #ver2.2.1
     n: 10
     light_threshold: 50

@@ -80,7 +80,7 @@ if __name__ == "__main__":
     # ---動画出力---
     # 動画パスの設定
     outdir=Path(fileConfig["videoFolder"])
-    outext=fileConfig["videoExtens"]
+    outext=".mp4"
     videoname=imagePath.name+f"_{mode}Mode_{demoConfig["errorSizes"]}_{weightMode}Weight"+outext
     videoPath=outdir/videoname
     videoPath.mkdir(parents=True,exist_ok=True)
