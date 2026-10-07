@@ -7,7 +7,12 @@ import cv2
 import numpy as np
 import yaml
 from stdScorePack.MIN2ver2 import MIN2_ignore_sunspots as min2v221
-from stdScorePack.std_score_visualize import crop_and_pad,calculate_hensachi,create_colormap,save_statistics_image
+from stdScorePack.std_score_visualize import (
+    calculate_hensachi,
+    create_colormap,
+    crop_and_pad,
+    save_statistics_image,
+)
 
 if __name__ == "__main__":
     # ===設定の読み込み===
@@ -59,7 +64,7 @@ if __name__ == "__main__":
     diffs=[]
     xmax,ymax=errorRange
     if weightMode == "No":
-        for f in range(fileConfig["videolength"]):
+        for _ in range(fileConfig["videolength"]):
             xdiff = randint(-xmax, xmax)
             ydiff = randint(-ymax, ymax)
             diffs.append([xdiff,ydiff])
@@ -87,7 +92,7 @@ if __name__ == "__main__":
 
     # 出力動画の設定
     video_writer = cv2.VideoWriter(
-        videoPath,cv2.VideoWriter_fourcc("mp4v"),fileConfig["framelate"],
+        videoPath,cv2.VideoWriter_fourcc("mp4v"),fileConfig["framelate"],#pyright:ignore [reportAttributeAccessIssue]
         (cropw,croph),
     )
 
@@ -106,13 +111,13 @@ if __name__ == "__main__":
     print("動画の作成が完了しました")
 
     # =============平均と標準偏差の画像作成用=============
-    imgdir="image" #TASK 代表値フォルダ 名前
+    imgdir="image"
     # 平均値画像を保存
-    meanImgName="MEAN"+videoname+".png"
-    save_statistics_image(mean,outdir\imgdir\meanImgName)
+    meanImgPath=outdir/imgdir/("MEAN"+videoname+".png")
+    save_statistics_image(mean,meanImgPath)
 
     # 標準偏差画像を保存
-    stdImgName="STD"+videoname+".png"
-    save_statistics_image(std,outdir\imgdir\stdImageName)
+    stdImgPath=outdir/imgdir/("STD"+videoname+".png")
+    save_statistics_image(std,stdImgPath)
 
     print("平均値画像と標準偏差画像の出力が完了しました")

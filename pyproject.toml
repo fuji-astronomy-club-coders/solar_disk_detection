@@ -32,7 +32,8 @@ exclude = [
     "venv",
     "build",
     "dist",
-    "./sich_sdt_score_visualize-execute01/stdScorePack/MIN2ver2.py"
+    "./sich_sdt_score_visualize-execute01/stdScorePack/MIN2ver2.py",
+    "./sich_sdt_score_visualize-execute01/stdScorePack/std_score_visualize.py"
 ]
 
 [tool.ruff.lint]
@@ -77,6 +78,7 @@ exclude = [
     ]
 ignore = [
     "sich_sdt_score_visualize-execute01/stdScorePack/MIN2ver2.py",
+    "sich_sdt_score_visualize-execute01/stdScorePack/std_score_visualize.py"
 ]
 typeCheckingMode = "standard"
 pythonVersion = "3.13"

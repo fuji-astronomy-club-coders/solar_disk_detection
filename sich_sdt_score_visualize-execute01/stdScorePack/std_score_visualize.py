@@ -12,6 +12,7 @@ from CSV_frames import save_images_to_csv
 from MIN2ver2 import MIN2_ignore_sunspots
 from samples.zip_operator import get_image_names_from_dir, load_image_from_path_cv2
 
+
 # 関数
 def create_colormap() -> np.ndarray:
     """256要素を持つLUTを作成(偏差値0~100に対応する色を設定)"""
@@ -161,7 +162,7 @@ def calculate_hensachi(frames: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.n
 
 
 # --- 実行とCSV保存（1フレームずつピクセル保存） ---
-if __name__ == "__main__":    # 全体
+if __name__ == "__main__":  # 全体
     OUTPUT_MODE = "VIDEO"  # CSV(0),VIDEO(2),WITH(1)
     # パラメータ std score
     INPUT_DIR = "./sun_images"  # 処理対象の画像フォルダ
@@ -293,8 +294,6 @@ if __name__ == "__main__":    # 全体
         )
 
         # 標準偏差画像を保存
-        save_statistics_image(
-            std, MEAN_STD_OUTPUT_DIR + "\\" + STD_IMAGE_NAME + IMAGE_EXT
-        )
+        save_statistics_image(std, MEAN_STD_OUTPUT_DIR + "\\" + STD_IMAGE_NAME + IMAGE_EXT)
 
         print("平均値画像と標準偏差画像の出力が完了しました")
