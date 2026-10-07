@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 import yaml
 from stdScorePack.MIN2ver2 import MIN2_ignore_sunspots as min2v221
-from stdScorePack.std_score_visualize import crop_and_pad,calculate_hensachi,create_colormap
+from stdScorePack.std_score_visualize import crop_and_pad,calculate_hensachi,create_colormap,save_statistics_image
 
 if __name__ == "__main__":
     # ===設定の読み込み===
@@ -80,7 +80,7 @@ if __name__ == "__main__":
     # ---動画出力---
     # 動画パスの設定
     outdir=Path(fileConfig["videoFolder"])
+    outdir.mkdir(parents=True,exist_ok=True)
     outext=".mp4"
-    videoname=imagePath.name+f"_{mode}Mode_{demoConfig["errorSizes"]}_{weightMode}Weight"+outext
-    videoPath=outdir/videoname
-    videoPath.mkdir(parents=True,exist_ok=True)
+    videoname=imagePath.name+f"_{mode}Mode_{demoConfig["errorSizes"]}_{weightMode}Weight"
+    videoPath=outdir/(videoname+outext)
