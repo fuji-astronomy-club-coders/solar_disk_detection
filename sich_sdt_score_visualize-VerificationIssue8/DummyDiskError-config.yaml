@@ -4,11 +4,11 @@ demoConfig:
         - 600 # w
     mode: absolute # 'absolute' or 'percent' percentは半径に対する割合
     errorSizes: # 半径補正は偏差値動画にないので再現もなし
-        - 3 # centerX
-        - 3 # centerY
+        - 1 # centerX
+        - 1 # centerY
     weight: "No" #'No'or...
 fileConfig:
-    samplePath: "" #1channel,16bit画像のみ対応
+    samplePath: "img00000001.tiff" #1channel,16bit画像のみ対応
     videoLength: 300 #(frame)
     framelate: 30 #(frame/second)
     outputFolder: "result"
