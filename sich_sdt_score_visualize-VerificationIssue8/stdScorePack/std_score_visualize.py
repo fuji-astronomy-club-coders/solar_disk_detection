@@ -8,9 +8,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import tqdm
-from CSV_frames import save_images_to_csv
-from MIN2ver2 import MIN2_ignore_sunspots
-from samples.zip_operator import get_image_names_from_dir, load_image_from_path_cv2
+from stdScorePack.MIN2ver2 import MIN2_ignore_sunspots
 
 
 # 関数
@@ -102,50 +100,6 @@ def crop_and_pad(img: np.ndarray, cx: int, cy: int, crop_h: int, crop_w: int) ->
     padded = cv2.copyMakeBorder(cropped, top, bottom, left, right, cv2.BORDER_CONSTANT, value=0)
 
     return padded
-
-
-def extract_sun_mini(dir_path: str, h_size: int, w_size: int) -> tuple[np.ndarray, np.ndarray]:
-    """フォルダ内の太陽画像から太陽中心を算出し、指定サイズで切りぬいた画像配列を返します。
-
-    画面端にかかる場合は、足りない部分を黒く塗りつぶします。
-
-    Args:
-        folder(str):対象の画像が保存されているフォルダのパス
-        h_size(int):切りぬく長方形の縦幅
-        w_size(int):切りぬく長方形の横幅
-
-    Returns
-    -------
-        tuple[np.ndarray, np.ndarray]:
-            - 切りぬかれた画像の3次元配列（N,h_size,w_size)
-            - 各画像の中心座標配列（N,2）
-    """
-    print(f"---画像の読み込みと切り抜き処理を開始:{dir_path}---")
-    # 画像ファイルのみ1000枚取得
-    image_names = get_image_names_from_dir(directory_path=dir_path, extensions=["*.tiff"])
-    frames = []
-    min2_centers = []
-    # tqdmによる進捗表示
-    for name in tqdm.tqdm(image_names, desc="Processing images"):
-        # 16bit(下位12bit)画像を輝度値(1ch)のまま正しく読み込む
-        img = load_image_from_path_cv2(dir_path, name)
-        if img is None:
-            continue
-        try:
-            cx, cy, _ = MIN2_ignore_sunspots(img, show=False, debug=False)
-        except Exception:
-            continue
-
-        cx = int(cx)
-        cy = int(cy)
-
-        padded = crop_and_pad(img, cx, cy, h_size, w_size)
-
-        frames.append(padded)
-        min2_centers.append([cx, cy])
-
-    return np.array(frames), np.array(min2_centers)
-
 
 def calculate_hensachi(frames: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """平均画像・標準偏差画像・偏差値画像を計算する。"""
