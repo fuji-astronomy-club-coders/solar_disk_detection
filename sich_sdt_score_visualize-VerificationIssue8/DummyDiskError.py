@@ -35,20 +35,18 @@ if __name__ == "__main__":
     imagePath = Path(fileConfig["samplePath"])
     if not imagePath.exists():
         raise FileNotFoundError(f"存在しないファイルです:{imagePath}")
-    image = (cv2.imread(imagePath), cv2.IMREAD_UNCHANGED)
+    image = cv2.imread(imagePath, cv2.IMREAD_UNCHANGED)
     if image is None:
         raise ValueError(f"ファイルの読み込みに失敗しました:{imagePath}")
-    else:
-        image = np.array(image)
-    if image.shape[2] != 1:
+    if len(image.shape) >= 3:
         raise ValueError(f"画像のチャネル数が1ではありません チャネル数:{image.shape[2]}")
 
     # 太陽円盤を検出
     cx, cy, r = min2v221(
         readed_img=image, img_name=imagePath.name, img_path=str(imagePath), **min2Config
     )
-    intcx = np.round(cx)
-    intcy = np.round(cy)
+    intcx = int(np.round(cx))
+    intcy = int(np.round(cy))
 
     # 最大誤差(pix)を計算
     if mode == "percent":
@@ -63,7 +61,7 @@ if __name__ == "__main__":
     diffs = []
     xmax, ymax = errorRange
     if weightMode == "No":
-        for _ in range(fileConfig["videolength"]):
+        for _ in range(fileConfig["videoLength"]):
             xdiff = randint(-xmax, xmax)
             ydiff = randint(-ymax, ymax)
             diffs.append([xdiff, ydiff])
@@ -73,10 +71,11 @@ if __name__ == "__main__":
     frames = []
     croph, cropw = demoConfig["cropHW"]
     for xdiff, ydiff in diffs:
+        # print(f"{[type(intcx),type(ydiff),type(croph)]}")
         frames.append(
             crop_and_pad(img=image, cx=intcx + xdiff, cy=intcy + ydiff, crop_h=croph, crop_w=cropw)
         )
-    frames = np.ndarray(frames)
+    frames = np.array(frames)
     # ===動画出力===
     # ---統計量計算---
     mean, std, stdScore = calculate_hensachi(frames=frames)
@@ -85,7 +84,7 @@ if __name__ == "__main__":
 
     # ---動画出力---
     # 動画パスの設定
-    outdir = Path(fileConfig["videoFolder"])
+    outdir = Path(fileConfig["outputFolder"])
     outdir.mkdir(parents=True, exist_ok=True)
     outext = ".mp4"
     videoname = imagePath.name + f"_{mode}Mode_{demoConfig['errorSizes']}_{weightMode}Weight"
@@ -94,8 +93,8 @@ if __name__ == "__main__":
     # 出力動画の設定
     video_writer = cv2.VideoWriter(
         videoPath,
-        cv2.VideoWriter_fourcc("mp4v"),
-        fileConfig["framelate"],  # pyright:ignore [reportAttributeAccessIssue]
+        cv2.VideoWriter_fourcc(*"mp4v"),# pyright:ignore [reportAttributeAccessIssue]
+        fileConfig["framelate"],
         (cropw, croph),
     )
 
