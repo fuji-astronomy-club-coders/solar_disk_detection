@@ -16,6 +16,7 @@ from stdScorePack.std_score_visualize import (
 
 if __name__ == "__main__":
     # ===設定の読み込み===
+    print("データの読み込み中...")
     config_name = "DummyDiskError-config.yaml"
     config_path = Path(__file__).parent / config_name
 
@@ -56,6 +57,7 @@ if __name__ == "__main__":
 
     # ===フレームデータの作成===
     # ---中心座標のリストを作成---
+    print("中心座標リストを作成中...")
     weightMode = demoConfig["weight"]
     # 誤差にウェイトをつけるならここ
     diffs = []
@@ -68,6 +70,7 @@ if __name__ == "__main__":
     else:
         raise ValueError(f"unknown weight mode:{weightMode}")
     # ---中心座標をもとに全フレームを生成---
+    print("ダミーフレームの作成中...")
     frames = []
     croph, cropw = demoConfig["cropHW"]
     for xdiff, ydiff in diffs:
@@ -76,6 +79,7 @@ if __name__ == "__main__":
             crop_and_pad(img=image, cx=intcx + xdiff, cy=intcy + ydiff, crop_h=croph, crop_w=cropw)
         )
     frames = np.array(frames)
+    print("出力中...")
     # ===動画出力===
     # ---統計量計算---
     mean, std, stdScore = calculate_hensachi(frames=frames)
