@@ -12,6 +12,8 @@ dependencies = [
     "matplotlib>=3.9",
     "Pillow>=10.0",
     "opencv-python==5.0.0.93",
+    "PyYAML==6.0.3",
+    "tqdm==4.70.0",
 ]
 
 [project.optional-dependencies]
@@ -21,7 +23,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["min2"]
+packages = ["min2","sich_sdt_score_visualize-VerificationIssue8"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
@@ -32,6 +34,8 @@ exclude = [
     "venv",
     "build",
     "dist",
+    "./sich_sdt_score_visualize-VerificationIssue8/stdScorePack/MIN2ver2.py",
+    "./sich_sdt_score_visualize-VerificationIssue8/stdScorePack/std_score_visualize.py"
 ]
 
 [tool.ruff.lint]
@@ -64,7 +68,8 @@ convention = "numpy"
 quote-style = "double"
 [tool.basedpyright]
 include = [
-    "min2",  
+    "min2",
+    "sich_sdt_score_visualize-VerificationIssue8"
     ]   
 exclude = [
     "**/__pycache__",
@@ -72,6 +77,10 @@ exclude = [
     "venv",
     "build",
     "dist",
+    ]
+ignore = [
+    "sich_sdt_score_visualize-VerificationIssue8/stdScorePack/MIN2ver2.py",
+    "sich_sdt_score_visualize-VerificationIssue8/stdScorePack/std_score_visualize.py"
 ]
 typeCheckingMode = "standard"
 pythonVersion = "3.13"

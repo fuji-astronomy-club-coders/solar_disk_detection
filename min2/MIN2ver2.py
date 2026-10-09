@@ -98,7 +98,7 @@ def _draw_circle(
 
 
 def _draw_division_lines(
-    ax: plt.Axes,
+    ax: plt.Axes,  # pyright: ignore[reportPrivateImportUsage]
     width: int,
     height: int,
     n: int,
