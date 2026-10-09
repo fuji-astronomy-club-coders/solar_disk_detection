@@ -1,13 +1,12 @@
-
 """
 最小二乗法による円の検出を行う関数
+
 main: MIN2_ignore_sunspots()
 
 一度検出した近似円の内側にある点のうち、近似円の外側にある点だけから近似した円から
 limb_wigth*(2/3) の範囲にないものは黒点とみなします。
 """
 
-import os
 import pathlib
 from pprint import pformat, pprint
 
@@ -87,14 +86,24 @@ def _resolve_divnum(n: int | None) -> int:
     return int(n)
 
 
-def _draw_circle(ax, cir_stat, color: str) -> None:
+def _draw_circle(
+    ax: plt.Axes,  # pyright: ignore[reportPrivateImportUsage]
+    cir_stat: tuple[float, ...] | list[float] | np.ndarray | bool | None,
+    color: str,
+) -> None:
     if cir_stat is None or isinstance(cir_stat, bool):
         return
     cx, cy, R = cir_stat[:3]
     ax.add_patch(Circle((cx, cy), R, fill=False, color=color, linewidth=2))
 
 
-def _draw_division_lines(ax, width: int, height: int, n: int, alpha: float) -> None:
+def _draw_division_lines(
+    ax: plt.Axes,
+    width: int,
+    height: int,
+    n: int,
+    alpha: float,  # pyright: ignore[reportPrivateImportUsage]
+) -> None:
     """cut_and_sampling が実際に走査する位置(i=1..n-1)にだけ分割線を引く。"""
     for i in range(1, n):
         ax.axvline(width * i // n, color="white", linestyle="--", alpha=alpha)
@@ -114,7 +123,8 @@ def cut_and_sampling(
         sun_threshold (Union[int, float]): 太陽像とみなす明るさのしきい値。これ以下の直線は処理をスキップする。
         n (int | None): 分割数。Noneならglobal変数divnumを使う。
 
-    Returns:
+    Returns
+    -------
         list[list[float]]: サンプリングされた縁の点 [x, y, grad_val, direc] のリスト。
             direc は DIR_X_LINE(0:横線走査) / DIR_Y_LINE(1:縦線走査)。
     """
@@ -159,10 +169,12 @@ def fit_circle(
         img_inst: 例外時の描画に使う画像(既定は"GLOBAL")。
         n (int | None): 例外時の描画に使う分割数。
 
-    Raises:
+    Raises
+    ------
         ValueError: 3点未満、または円を確定できない場合。
 
-    Returns:
+    Returns
+    -------
         list[float]: [cx, cy, R]
     """
     if len(spots) < 3:
@@ -310,10 +322,8 @@ def show_circle(
     gs = gridspec.GridSpec(rows, cols + 3, figure=fig)
 
     iter_text = "Last" if is_last else str(iteration_count)
-    img_name = os.path.basename(img_path) if img_path else "Unknown"
-    fig.suptitle(
-        f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
-    )
+    img_name = pathlib.Path(img_path).name if img_path else "Unknown"
+    fig.suptitle(f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold")
 
     # メイン画像の描画
     ax_main = fig.add_subplot(gs[:, :3])
@@ -337,7 +347,7 @@ def show_circle(
     ax_main.scatter(x, y, color="red", label="Edges", s=50)
 
     # 座標ラベルと対応関係のための番号を表示
-    for idx, (xi, yi) in enumerate(zip(x, y)):
+    for idx, (xi, yi) in enumerate(zip(x, y, strict=False)):
         ax_main.text(
             xi,
             yi,
@@ -359,9 +369,7 @@ def show_circle(
         )
 
     _draw_division_lines(ax_main, w, h, n, alpha=0.3)
-    ax_main.text(
-        0.05, 0.9, f"n={n}", color="cyan", fontsize=10, transform=ax_main.transAxes
-    )
+    ax_main.text(0.05, 0.9, f"n={n}", color="cyan", fontsize=10, transform=ax_main.transAxes)
     ax_main.legend()
     ax_main.axis("equal")
 
@@ -403,9 +411,7 @@ def show_circle(
 
         ax_sub_twin = ax_sub.twinx()
         color_diff = "tab:cyan"
-        ax_sub_twin.plot(
-            x_coords, grad_vals, color=color_diff, linewidth=1.5, linestyle="--"
-        )
+        ax_sub_twin.plot(x_coords, grad_vals, color=color_diff, linewidth=1.5, linestyle="--")
         ax_sub_twin.tick_params(axis="y", labelcolor=color_diff, labelsize=7)
 
         ax_sub.axvline(0, color="red", linestyle="-", linewidth=1, alpha=0.5)
@@ -458,11 +464,9 @@ def show_circle_simple(
             edgecolors="white",
         )
 
-    img_name = os.path.basename(img_path) if img_path else "Unknown"
+    img_name = pathlib.Path(img_path).name if img_path else "Unknown"
     iter_text = "Last" if is_last else str(iteration_count)
-    fig.suptitle(
-        f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold"
-    )
+    fig.suptitle(f"{img_name}  |  Iteration: {iter_text}", fontsize=16, fontweight="bold")
 
     _draw_division_lines(ax, w, h, n, alpha=0.5)
     ax.text(0.05, 0.9, f"n={n}", color="cyan", fontsize=10, transform=ax.transAxes)
@@ -503,7 +507,8 @@ def MIN2_ignore_sunspots(
         img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
         show_simple (bool): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
 
-    Returns:
+    Returns
+    -------
         tuple[tuple[float, float], float]: ((cx, cy), r)
     """
     global divnum, img, height, width  # 外部コード互換のため値を残す(内部では使わない)
@@ -573,9 +578,7 @@ def MIN2_ignore_sunspots(
             print("[WARN]:外側の点が3点未満のため、黒点排除を打ち切ります。")
             break
         try:
-            cxo, cyo, ro = fit_circle(
-                np.array(outside_spots, dtype=float), show, image, n
-            )
+            cxo, cyo, ro = fit_circle(np.array(outside_spots, dtype=float), show, image, n)
         except ValueError as e:
             print(f"[WARN]:外側の点から円を作れないため、黒点排除を打ち切ります。({e})")
             break
@@ -592,9 +595,7 @@ def MIN2_ignore_sunspots(
                     simple=show_simple,
                     n=n,
                 )
-            print(
-                f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}"
-            )
+            print(f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}")
 
         sunspots: list[int] = []
         retry_points: list[list] = []
@@ -654,19 +655,20 @@ def MIN2_ignore_sunspots(
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:
     exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
-    return sorted(
-        p for p in pathlib.Path(dirpath).iterdir() if p.suffix.lower() in exts
-    )
+    return sorted(p for p in pathlib.Path(dirpath).iterdir() if p.suffix.lower() in exts)
 
 
 def main() -> None:
+    """Run the main command-line process."""
     import argparse
     from time import perf_counter
 
     DIR_MODE_LIMB_WIDTH = 60
 
     parser = argparse.ArgumentParser(description="太陽像の近似円を検出する")
-    parser.add_argument("path", nargs="?", help="画像ファイルまたはフォルダ。省略時はダイアログで選択")
+    parser.add_argument(
+        "path", nargs="?", help="画像ファイルまたはフォルダ。省略時はダイアログで選択"
+    )
     parser.add_argument("--dir", action="store_true", help="フォルダ内の全画像を処理する")
     args = parser.parse_args()
 
