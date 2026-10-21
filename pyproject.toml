@@ -23,7 +23,7 @@ dev = [
 ]
 
 [tool.setuptools]
-packages = ["min2","sich_sdt_score_visualize-VerificationIssue8"]
+packages = ["min2"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
@@ -67,10 +67,7 @@ convention = "numpy"
 [tool.ruff.format]
 quote-style = "double"
 [tool.basedpyright]
-include = [
-    "min2",
-    "sich_sdt_score_visualize-VerificationIssue8"
-    ]   
+include = ["min2"]   
 exclude = [
     "**/__pycache__",
     ".venv",
