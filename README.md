@@ -16,6 +16,7 @@ solar_disk_detection-MIN2_v2.4.0/
 ├── min2/
 │   ├── __init__.py        # バージョン情報の定義
 │   └── MIN2ver2.py        # 円検出・黒点除外処理コアロジック
+├── min2_config.yaml  # 設定ファイルのサンプル
 ├── generate_dependencies.py
 ├── pyproject.toml         # プロジェクト設定および依存関係定義
 ├── LICENSE                # ライセンス情報
@@ -112,6 +113,36 @@ python -m min2.MIN2ver2 path/to/folder --dir
 ```
 
 
+
+---
+
+## 設定（YAML は任意）
+
+パラメータは YAML で制御できますが、**YAML なしでも、PyYAML 未インストールでも動作します**（既定値はコード内の `MIN2Config` が持っています）。
+`min2/MIN2ver2.py` は他ファイルに依存しないため、パッケージとして使う場合も、このファイル単体をコピーして使う場合も同じ設定の仕組みが使えます。
+
+優先順位: **関数/CLI の明示引数 > YAML（dict / `MIN2Config`）> コード内の既定値**
+
+```python
+from min2.MIN2ver2 import MIN2_ignore_sunspots, load_config   # 単体利用なら from MIN2ver2 import ...
+
+# YAML なし（従来どおり）
+MIN2_ignore_sunspots(img_path="sun.png")
+
+# YAML で制御
+MIN2_ignore_sunspots(img_path="sun.png", config="min2_config.yaml")
+
+# dict でも可。明示引数（n=12）は YAML より優先
+MIN2_ignore_sunspots(img_path="sun.png", config={"n": 8}, n=12)
+```
+
+CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG` → `./min2_config.yaml` → `MIN2ver2.py` と同じフォルダ、の順に探します（無ければ既定値）。ライブラリ呼び出しでは自動探索せず、`config=` を渡したときだけ読み込みます。
+
+```bash
+python -m min2.MIN2ver2 sun.png --config min2_config.yaml
+```
+
+キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。
 
 ---
 

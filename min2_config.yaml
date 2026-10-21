@@ -1,0 +1,15 @@
+# MIN2 設定ファイルのサンプル。すべて省略可能(省略した項目は既定値)。
+# 使い方:
+#   CLI      : python -m min2.MIN2ver2 image.png --config min2_config.yaml
+#              (--config 省略時は 環境変数 MIN2_CONFIG → ./min2_config.yaml → MIN2ver2.py の隣 の順に探す)
+#   Python   : MIN2_ignore_sunspots(img_inst, config="min2_config.yaml")
+# 優先順位: 関数/CLIの明示引数 > このYAML > コード内の既定値
+
+n: 10                    # 画像格子の分割数(2以上)
+light_threshold: 50      # 太陽像とみなす輝度のしきい値(16bit画像は自動で256倍)
+limb_wigth: 24           # 太陽の縁の幅の基準値
+iter_cycles: 2           # 黒点排除の最大反復回数(0なら排除なし)
+show: false              # 結果を描画する(CLIの既定は true)
+debug: false             # ログ・途中経過を出力する(CLIの既定は true)
+show_simple: false       # 描画をシンプル表示にする
+dir_mode_limb_wigth: 60  # CLIの --dir(フォルダ一括)時に使う limb_wigth
