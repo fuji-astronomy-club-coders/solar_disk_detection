@@ -7,8 +7,12 @@ main: MIN2_ignore_sunspots()
 limb_wigth*(2/3) の範囲にないものは黒点とみなします。
 """
 
+import os
 import pathlib
+import warnings
+from dataclasses import dataclass, fields, replace
 from pprint import pformat, pprint
+from typing import Any
 
 import cv2
 import matplotlib.pyplot as plt
@@ -16,7 +20,7 @@ import numpy as np
 from matplotlib import gridspec
 from matplotlib.patches import Circle
 
-version = "MIN2 v2.4.0"  # 黒点リトライ座標・iter_cycles=0・グローバル依存・描画まわりの修正
+version = "MIN2 v2.4.1"  # yamlによるConfig実装
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -33,6 +37,128 @@ _NO_IMAGE_MSG = (
     "画像が指定されていません。imgを渡す、グローバル変数imgを設定する、"
     "または画像のパスを引数に追加してください。"
 )
+
+
+# ---------------------------------------------------------------------------
+# 設定(YAML は任意。無くても、PyYAML が未インストールでも動く)
+# ---------------------------------------------------------------------------
+# 優先順位: 関数/CLI の明示引数 > YAML(または dict / MIN2Config) > コード内の既定値
+CONFIG_ENV_VAR = "MIN2_CONFIG"  # 設定ファイルのパスを指す環境変数
+CONFIG_FILENAME = "min2_config.yaml"  # CLI が自動探索するファイル名
+
+
+@dataclass(frozen=True)
+class MIN2Config:
+    """MIN2 の設定。既定値はこのクラスが唯一の定義元(YAMLが無くてもこの値で動く)。"""
+
+    n: int = 10  # 画像格子の分割数(2以上)
+    light_threshold: int = 50  # 太陽像とみなす輝度のしきい値
+    limb_wigth: int = 24  # 太陽の縁の幅の基準値
+    iter_cycles: int = 2  # 黒点排除の最大反復回数(0なら排除なし)
+    show: bool = False  # 結果を描画するか
+    debug: bool = False  # ログ/途中経過を出すか
+    show_simple: bool = False  # 描画をシンプル表示にするか
+    dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
+
+    def __post_init__(self) -> None:
+        """Validate configuration values after dataclass initialization."""
+        for f in fields(self):
+            value = getattr(self, f.name)
+            if f.type in (bool, "bool"):
+                ok = isinstance(value, bool)
+            else:  # int。bool は int のサブクラスなので除外する
+                ok = isinstance(value, int) and not isinstance(value, bool)
+            if not ok:
+                raise ValueError(f"設定 '{f.name}' の型が不正です: {value!r} ({f.type} が必要)")
+        if self.n < 2:
+            raise ValueError("設定 'n'(分割数)は 2 以上にしてください。")
+        if self.iter_cycles < 0:
+            raise ValueError("設定 'iter_cycles' は 0 以上にしてください。")
+
+
+_CONFIG_KEYS = {f.name for f in fields(MIN2Config)}
+
+
+def _read_yaml(path: pathlib.Path) -> dict[str, Any]:
+    try:
+        import yaml  # 遅延import: 設定を使わない単体利用ではPyYAML不要
+    except ImportError as e:
+        raise ImportError(
+            f"YAML設定({path})を読むには PyYAML が必要です: pip install PyYAML"
+        ) from e
+    with path.open(encoding="utf-8") as fp:
+        data = yaml.safe_load(fp)
+    if data is None:  # 空ファイル
+        return {}
+    if not isinstance(data, dict):
+        raise ValueError(f"設定ファイルはキーと値のマッピングで書いてください: {path}")
+    return data
+
+
+def find_config_file() -> pathlib.Path | None:
+    """設定ファイルを探す。環境変数 MIN2_CONFIG > カレントディレクトリ > このファイルの隣。"""
+    env = os.environ.get(CONFIG_ENV_VAR)
+    if env:
+        path = pathlib.Path(env)
+        if not path.is_file():
+            raise FileNotFoundError(f"{CONFIG_ENV_VAR} が指すファイルがありません: {env}")
+        return path
+    for base in (pathlib.Path.cwd(), pathlib.Path(__file__).resolve().parent):
+        path = base / CONFIG_FILENAME
+        if path.is_file():
+            return path
+    return None
+
+
+def load_config(
+    source: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
+    *,
+    search: bool = False,
+    defaults: dict[str, Any] | None = None,
+) -> MIN2Config:
+    """設定を MIN2Config にまとめる。YAMLは必須ではない。
+
+    Args:
+        source: YAMLファイルのパス / dict / MIN2Config / None(すべて既定値)。
+        search: True かつ source が None のとき、設定ファイルを自動探索する(CLI向け)。
+            見つからない、または PyYAML が無い場合は黙って既定値で続行する。
+        defaults: コード既定値の上書き(CLI が show=True などを既定にするため)。
+            YAMLの値はこれよりも優先される。
+
+    Raises
+    ------
+        FileNotFoundError: 明示指定したパスが存在しない。
+        ValueError: 未知のキー、型や範囲の不正。
+    """
+    if isinstance(source, MIN2Config):
+        return source
+
+    data: dict[str, Any] = dict(defaults or {})
+    if isinstance(source, dict):
+        data.update(source)
+    else:
+        path: pathlib.Path | None
+        if source is None:
+            path = find_config_file() if search else None
+        else:
+            path = pathlib.Path(source)
+            if not path.is_file():
+                raise FileNotFoundError(f"設定ファイルがありません: {path}")
+        if path is not None:
+            try:
+                data.update(_read_yaml(path))
+            except ImportError:
+                if source is not None:
+                    raise
+                warnings.warn(
+                    f"PyYAML が無いため {path} を読み込めません。既定値で続行します。",
+                    stacklevel=2,
+                )
+
+    unknown = sorted(set(data) - _CONFIG_KEYS)
+    if unknown:
+        raise ValueError(f"未知の設定キー: {unknown}(有効なキー: {sorted(_CONFIG_KEYS)})")
+    return replace(MIN2Config(), **data)
 
 
 # ---------------------------------------------------------------------------
@@ -481,14 +607,15 @@ def show_circle_simple(
 # ---------------------------------------------------------------------------
 def MIN2_ignore_sunspots(
     img_inst: np.ndarray | str = "PATH",
-    n: int = 10,
-    light_threshold: int = 50,
-    limb_wigth: int = 24,
-    iter_cycles: int = 2,
-    show: bool = False,
-    debug: bool = False,
+    n: int | None = None,
+    light_threshold: int | None = None,
+    limb_wigth: int | None = None,
+    iter_cycles: int | None = None,
+    show: bool | None = None,
+    debug: bool | None = None,
     img_path: pathlib.Path | str | None = "",
-    show_simple: bool = False,
+    show_simple: bool | None = None,
+    config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -497,21 +624,34 @@ def MIN2_ignore_sunspots(
 
     Args:
         img_inst: 入力画像（グレースケール/カラー）または読み込み指示("PATH"ならimg_pathを読み込む)。
-        n (int): 画像格子の分割数(2以上)。デフォルトは 10 です。
-        light_threshold (int): 太陽の明るさの基準しきい値。16bit画像では自動で256倍されます。
-        limb_wigth (int): 太陽の縁の幅の基準値。デフォルトは 24 です。
-        iter_cycles (int): 黒点排除の最大反復回数。複数の黒点に対応できます。0なら排除なし。デフォルトは2。
+        n (int | None): 画像格子の分割数(2以上)。既定は 10 です。
+        light_threshold (int | None): 太陽の明るさの基準しきい値(既定50)。16bit画像では自動で256倍されます。
+        limb_wigth (int | None): 太陽の縁の幅の基準値。既定は 24 です。
+        iter_cycles (int | None): 黒点排除の最大反復回数。複数の黒点に対応できます。0なら排除なし。既定は2。
             黒点が見つからなくなった時点で早期終了します。
-        show (bool): 最終的な検出結果の画像を表示するかどうか。
-        debug (bool): 各ステップの描画(showもTrueのとき)やログを出力するかどうか。
+        show (bool | None): 最終的な検出結果の画像を表示するかどうか。
+        debug (bool | None): 各ステップの描画(showもTrueのとき)やログを出力するかどうか。
         img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
-        show_simple (bool): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
+        show_simple (bool | None): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
+        config: 設定。YAMLのパス / dict / MIN2Config / None。None なら既定値(自動探索はしない)。
+
+    上記の n〜show_simple は None のとき config の値、config にも無ければ既定値を使います。
+    明示的に渡した引数が常に最優先です。
 
     Returns
     -------
         tuple[tuple[float, float], float]: ((cx, cy), r)
     """
     global divnum, img, height, width  # 外部コード互換のため値を残す(内部では使わない)
+
+    cfg = load_config(config)
+    n = cfg.n if n is None else n
+    light_threshold = cfg.light_threshold if light_threshold is None else light_threshold
+    limb_wigth = cfg.limb_wigth if limb_wigth is None else limb_wigth
+    iter_cycles = cfg.iter_cycles if iter_cycles is None else iter_cycles
+    show = cfg.show if show is None else show
+    debug = cfg.debug if debug is None else debug
+    show_simple = cfg.show_simple if show_simple is None else show_simple
 
     if n < 2:
         raise ValueError("分割数 n は 2 以上にしてください。")
@@ -663,14 +803,20 @@ def main() -> None:
     import argparse
     from time import perf_counter
 
-    DIR_MODE_LIMB_WIDTH = 60
-
     parser = argparse.ArgumentParser(description="太陽像の近似円を検出する")
     parser.add_argument(
         "path", nargs="?", help="画像ファイルまたはフォルダ。省略時はダイアログで選択"
     )
     parser.add_argument("--dir", action="store_true", help="フォルダ内の全画像を処理する")
+    parser.add_argument(
+        "--config",
+        help=f"YAML設定ファイル。省略時は ${CONFIG_ENV_VAR}、./{CONFIG_FILENAME}、"
+        "このファイルの隣の順に探し、無ければ既定値",
+    )
     args = parser.parse_args()
+
+    # CLI は従来どおり show/debug を既定で有効にする(YAMLで上書き可)
+    cfg = load_config(args.config, search=args.config is None, defaults={"show": True, "debug": True})
 
     path = args.path
     if path is None:
@@ -698,22 +844,18 @@ def main() -> None:
             try:
                 (cx, cy), r = MIN2_ignore_sunspots(
                     "PATH",
-                    show=True,
-                    debug=True,
-                    limb_wigth=DIR_MODE_LIMB_WIDTH,
+                    limb_wigth=cfg.dir_mode_limb_wigth,
                     img_path=file,
+                    config=cfg,
                 )
             except ValueError as e:
-                # 旧コードは読み込み失敗で break して残りを全部スキップしていた
                 print(f"[ERROR]:{file}: {e}")
                 continue
             print((float(cx), float(cy), float(r)))
     else:
         print(f"[INFO]:image={path}")
         start = perf_counter()
-        result = MIN2_ignore_sunspots(
-            "PATH", show=True, debug=True, img_path=path, show_simple=False
-        )
+        result = MIN2_ignore_sunspots("PATH", img_path=path, config=cfg)
         print(f"[INFO]:result{result}")
         print(f"[INFO]:process time :{perf_counter() - start} s")
 
