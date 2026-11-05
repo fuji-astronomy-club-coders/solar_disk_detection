@@ -52,6 +52,9 @@ jobs:
           ruff check . \
             --config .github/ci/ruff.toml \
             --ignore I001,D,PTH,UP015,UP017,B905
+      - name: Run unit tests
+        run: python -m unittest discover -s tests -v
+
       # ----------------------------------------
       # basedpyright
       # ----------------------------------------
