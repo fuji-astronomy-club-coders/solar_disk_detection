@@ -7,7 +7,7 @@
 
 n: 10                    # 画像格子の分割数(2以上)
 light_threshold: 50      # 太陽像とみなす輝度のしきい値(16bit画像は自動で256倍)
-limb_wigth: 24           # 太陽の縁の幅の基準値
+limb_wigth: 24           # 整数はpix単位。文字列なら "1/20" のように太陽半径に対する割合を指定。
 iter_cycles: 2           # 黒点排除の最大反復回数(0なら排除なし)
 show: false              # 結果を描画する(CLIの既定は true)
 debug: false             # ログ・途中経過を出力する(CLIの既定は true)
