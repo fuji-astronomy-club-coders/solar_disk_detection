@@ -20,6 +20,11 @@ import numpy as np
 from matplotlib import gridspec
 from matplotlib.patches import Circle
 
+try:
+    from .image_loader import load_image
+except ImportError:  # 直接実行・単体配置時の互換性
+    from image_loader import load_image
+
 version = "MIN2 v2.4.3"  # limb_wigthの割合指定を修正
 
 # spot の 4 番目の要素(走査方向)
@@ -222,7 +227,7 @@ def _resolve_image(
         elif img_inst == "PATH":
             if img_path is None or str(img_path) == "":
                 raise ValueError(_NO_IMAGE_MSG)
-            image = cv2.imread(str(img_path), cv2.IMREAD_UNCHANGED)
+            image = load_image(img_path)
             if image is None:
                 raise ValueError(f"画像の読み込みに失敗しました: {img_path}")
         else:
@@ -715,7 +720,7 @@ def MIN2_ignore_sunspots(
         # パスの存在チェックは、実際にそれを読み込むときだけ行う
         if path_obj is None or not path_obj.is_file():
             raise ValueError(f"そのパスの画像は存在しません。: {img_path}")
-        readed_img = cv2.imread(str(path_obj), cv2.IMREAD_UNCHANGED)
+        readed_img = load_image(path_obj)
         if readed_img is None:
             raise ValueError("画像の読み込みに失敗しました。")
     else:
@@ -855,7 +860,7 @@ def MIN2_ignore_sunspots(
 
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:
-    exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff"}
+    exts = {".jpg", ".jpeg", ".png", ".tif", ".tiff", ".fits", ".fit", ".fts"}
     return sorted(
         p for p in pathlib.Path(dirpath).iterdir() if p.suffix.lower() in exts
     )
@@ -899,7 +904,7 @@ def main() -> None:
                 title="画像を選択してください",
                 # セミコロン区切りの1文字列はWindows以外で効かないのでタプルで渡す
                 filetypes=[
-                    ("Image files", ("*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff"))
+                    ("Image files", ("*.jpg", "*.jpeg", "*.png", "*.tif", "*.tiff", "*.fits", "*.fit", "*.fts"))
                 ],
             )
         root.destroy()
