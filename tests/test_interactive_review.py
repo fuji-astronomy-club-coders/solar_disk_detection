@@ -67,7 +67,7 @@ class InteractiveReviewTests(unittest.TestCase):
             patch("min2.MIN2ver2.fit_circle", return_value=[32.0, 32.0, 20.0]),
             patch(
                 "min2.MIN2ver2._review_points_interactively",
-                side_effect=lambda _image, points, _circle, _title: points,
+                return_value=spots,
             ) as review,
         ):
             MIN2_ignore_sunspots(
@@ -79,8 +79,8 @@ class InteractiveReviewTests(unittest.TestCase):
             )
 
         self.assertEqual(review.call_count, 2)
-        self.assertEqual(review.call_args_list[0].args[3], "Trial circle: review sampled edge points")
-        self.assertEqual(review.call_args_list[1].args[3], "Iteration 1: review retained edge points")
+        self.assertEqual(review.call_args_list[0].args[3], "trial circle：検出点の確認")
+        self.assertEqual(review.call_args_list[1].args[3], "反復 1：残存点の確認")
 
 
 if __name__ == "__main__":
