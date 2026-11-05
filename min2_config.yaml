@@ -12,4 +12,6 @@ iter_cycles: 2           # 黒点排除の最大反復回数(0なら排除なし
 show: false              # 結果を描画する(CLIの既定は true)
 debug: false             # ログ・途中経過を出力する(CLIの既定は true)
 show_simple: false       # 描画をシンプル表示にする
+interactive_review: false # trial circle / 各反復で手動レビューする
+                          # 点をクリックして除外・復帰、Enterで適用、Escで取消
 dir_mode_limb_wigth: 60  # CLIの --dir(フォルダ一括)時に使う limb_wigth
