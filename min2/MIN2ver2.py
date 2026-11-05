@@ -660,6 +660,7 @@ class _ReviewWindow(Protocol):
         title: str,
     ) -> list[list[float]]:
         """Show the current points and wait for the user's selection."""
+        ...
 
 
 def _review_points_interactively(
