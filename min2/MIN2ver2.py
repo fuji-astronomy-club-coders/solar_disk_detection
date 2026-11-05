@@ -690,7 +690,7 @@ def _review_points_interactively(
     ax.text(
         0.01,
         0.99,
-        "Click: toggle exclude / restore   |   Enter: apply   |   Esc: cancel",
+        "クリック：除外／復帰   |   Enter：適用   |   Esc：取消",
         color="white",
         fontsize=9,
         va="top",
@@ -700,7 +700,7 @@ def _review_points_interactively(
     status = ax.text(
         0.01,
         0.02,
-        f"Included: {len(spots)} / {len(spots)}",
+        f"採用点: {len(spots)} / {len(spots)}",
         color="white",
         fontsize=9,
         transform=ax.transAxes,
@@ -717,7 +717,7 @@ def _review_points_interactively(
         scatter.set_facecolors(colors)
         scatter.set_edgecolors(colors)
         status.set_text(
-            f"Included: {len(spots) - len(excluded_indices)} / {len(spots)}"
+            f"採用点: {len(spots) - len(excluded_indices)} / {len(spots)}"
         )
         fig.canvas.draw_idle()
 
@@ -859,7 +859,7 @@ def MIN2_ignore_sunspots(
     cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
     if interactive_review:
         reviewed_spots = _review_points_interactively(
-            image, spots, (cx, cy, r), "Trial circle: review sampled edge points"
+            image, spots, (cx, cy, r), "trial circle：検出点の確認"
         )
         if len(reviewed_spots) < len(spots):
             try:
@@ -893,7 +893,7 @@ def MIN2_ignore_sunspots(
                 image,
                 safe_points,
                 (cx, cy, r),
-                f"Iteration {cycle}: review retained edge points",
+                f"反復 {cycle}：残存点の確認",
             )
             if len(reviewed_points) < len(safe_points):
                 try:
