@@ -5,7 +5,24 @@ from unittest.mock import patch
 
 import numpy as np
 
-from min2.MIN2ver2 import MIN2_ignore_sunspots, load_config
+from min2.MIN2ver2 import _MIN2_ignore_sunspots_core, load_config
+
+
+class _FakeReviewWindow:
+    """Stub the persistent UI controller for headless unit tests."""
+
+    def update_processing(self, message: str) -> None:
+        """Accept progress updates without opening a window."""
+
+    def review(
+        self,
+        image: np.ndarray,
+        spots: list[list[float]],
+        circle: tuple[float, float, float],
+        title: str,
+    ) -> list[list[float]]:
+        """Return all points unchanged."""
+        return spots
 
 
 class InteractiveReviewTests(unittest.TestCase):
@@ -40,12 +57,13 @@ class InteractiveReviewTests(unittest.TestCase):
                 return_value=reviewed_spots,
             ) as review,
         ):
-            result = MIN2_ignore_sunspots(
+            result = _MIN2_ignore_sunspots_core(
                 img_inst=image,
                 n=2,
                 light_threshold=0,
                 iter_cycles=0,
                 interactive_review=True,
+                review_ui=_FakeReviewWindow(),
             )
 
         review.assert_called_once()
@@ -70,12 +88,13 @@ class InteractiveReviewTests(unittest.TestCase):
                 return_value=spots,
             ) as review,
         ):
-            MIN2_ignore_sunspots(
+            _MIN2_ignore_sunspots_core(
                 img_inst=image,
                 n=2,
                 light_threshold=0,
                 iter_cycles=1,
                 interactive_review=True,
+                review_ui=_FakeReviewWindow(),
             )
 
         self.assertEqual(review.call_count, 2)
