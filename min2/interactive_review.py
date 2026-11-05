@@ -143,6 +143,10 @@ class InteractiveReviewWindow:
         self._image_artist: AxesImage | None = None
         self._circle_artist: Circle | None = None
         self._point_annotations: list[Annotation] = []
+        self._histogram_click_state: float | None = None
+        self._intensity_range: tuple[float, float] | None = None
+        self._isophote_value: float | None = None
+        self._isophote_artist: object | None = None
         self._rectangle_selector: RectangleSelector | None = None
         self._lasso_selector: LassoSelector | None = None
         self._selection_mode = tk.StringVar(value="point")
@@ -232,38 +236,58 @@ class InteractiveReviewWindow:
 
         self._profile_frame = ttk.LabelFrame(
             self._plot_frame,
-            text="縁近傍の輝度プロファイル",
+            text="輝度ヒストグラム / 縁近傍プロファイル",
             padding=4,
         )
-        self._profile_frame.rowconfigure(0, weight=1)
+        self._profile_frame.rowconfigure(2, weight=1)
         self._profile_frame.columnconfigure(0, weight=1)
+
+        histogram_controls = ttk.Frame(self._profile_frame)
+        histogram_controls.grid(row=0, column=0, columnspan=2, sticky=tk.EW)
+        ttk.Label(
+            histogram_controls,
+            text="ヒストグラム: 左クリック2回で表示範囲、右クリックで等輝度線",
+            wraplength=470,
+        ).pack(side=tk.TOP, anchor=tk.W)
+        histogram_buttons = ttk.Frame(histogram_controls)
+        histogram_buttons.pack(side=tk.TOP, anchor=tk.W, pady=(3, 2))
+        ttk.Button(
+            histogram_buttons, text="表示範囲をリセット", command=self._reset_intensity_range
+        ).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(
+            histogram_buttons, text="等輝度線を解除", command=self._clear_isophote
+        ).pack(side=tk.LEFT)
+
+        self.histogram_figure = Figure(figsize=(5.2, 2.2), dpi=90)
+        self.histogram_axes = self.histogram_figure.add_subplot(111)
+        self.histogram_canvas = FigureCanvasTkAgg(
+            self.histogram_figure, master=self._profile_frame
+        )
+        self.histogram_canvas.get_tk_widget().grid(
+            row=1, column=0, columnspan=2, sticky=tk.EW
+        )
+        self.histogram_canvas.mpl_connect("button_press_event", self._on_histogram_click)
+
         self._profile_scroll = tk.Canvas(
-            self._profile_frame,
-            highlightthickness=0,
-            width=500,
+            self._profile_frame, highlightthickness=0, width=500
         )
         profile_scrollbar = ttk.Scrollbar(
-            self._profile_frame,
-            orient=tk.VERTICAL,
-            command=self._profile_scroll.yview,
+            self._profile_frame, orient=tk.VERTICAL, command=self._profile_scroll.yview
         )
         self._profile_scroll.configure(yscrollcommand=profile_scrollbar.set)
-        self._profile_scroll.grid(row=0, column=0, sticky=tk.NSEW)
-        profile_scrollbar.grid(row=0, column=1, sticky=tk.NS)
+        self._profile_scroll.grid(row=2, column=0, sticky=tk.NSEW)
+        profile_scrollbar.grid(row=2, column=1, sticky=tk.NS)
 
         self._profile_inner = ttk.Frame(self._profile_scroll)
         self._profile_window = self._profile_scroll.create_window(
-            (0, 0),
-            window=self._profile_inner,
-            anchor=tk.NW,
+            (0, 0), window=self._profile_inner, anchor=tk.NW
         )
         self._profile_inner.bind("<Configure>", self._on_profile_inner_configure)
         self._profile_scroll.bind("<Configure>", self._on_profile_scroll_configure)
 
         self.profile_figure = Figure(figsize=(5.1, 3), dpi=90)
         self.profile_canvas = FigureCanvasTkAgg(
-            self.profile_figure,
-            master=self._profile_inner,
+            self.profile_figure, master=self._profile_inner
         )
         self.profile_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self._profile_frame.grid_remove()
@@ -421,6 +445,9 @@ class InteractiveReviewWindow:
         self._active_request = request
         self._last_image = request.image
         self._excluded_indices.clear()
+        self._histogram_click_state = None
+        self._intensity_range = None
+        self._isophote_value = None
         self._status.set(request.title)
         self._detail.set(
             "点をクリックして個別に切り替えるか、矩形／自由範囲で囲んだ点を除外できます。"
@@ -493,16 +520,126 @@ class InteractiveReviewWindow:
             f"採用点: {included} / {len(request.spots)}    "
             f"除外点: {len(self._excluded_indices)}"
         )
+        self._apply_image_display_options()
         self.canvas.draw_idle()
 
     def _toggle_profiles(self) -> None:
-        """Show or hide the edge-neighborhood brightness graphs."""
+        """Show histogram controls and optionally show edge-neighborhood graphs."""
         request = self._active_request
-        if not self._show_profiles.get() or request is None:
+        if request is None:
             self._profile_frame.grid_remove()
             return
         self._profile_frame.grid(row=0, column=1, sticky=tk.NSEW, padx=(6, 0))
-        self._draw_brightness_profiles()
+        if self._show_profiles.get():
+            self._profile_scroll.grid()
+            self._draw_brightness_profiles()
+        else:
+            self._profile_scroll.grid_remove()
+        self._draw_histogram()
+
+    def _draw_histogram(self) -> None:
+        """Draw the image-intensity histogram and current display/contour markers."""
+        request = self._active_request
+        if request is None:
+            return
+        values = np.asarray(request.image, dtype=float)
+        if values.ndim == 3:
+            values = np.mean(values[..., :3], axis=2)
+        finite = values[np.isfinite(values)]
+        self.histogram_axes.clear()
+        if finite.size == 0:
+            self.histogram_axes.set_title("有効な輝度値がありません")
+            self.histogram_canvas.draw_idle()
+            return
+        self.histogram_axes.hist(finite, bins=256, color="slategray", log=True)
+        self.histogram_axes.set_title("画像の輝度分布")
+        self.histogram_axes.set_xlabel("輝度値")
+        self.histogram_axes.set_ylabel("画素数 (log)")
+        if self._intensity_range is not None:
+            low, high = self._intensity_range
+            self.histogram_axes.axvspan(low, high, color="gold", alpha=0.25)
+            self.histogram_axes.axvline(low, color="darkorange", linewidth=1.2)
+            self.histogram_axes.axvline(high, color="darkorange", linewidth=1.2)
+        if self._isophote_value is not None:
+            self.histogram_axes.axvline(
+                self._isophote_value, color="cyan", linewidth=1.5, linestyle="--"
+            )
+        self.histogram_canvas.draw_idle()
+
+    def _on_histogram_click(self, event: MouseEvent) -> None:
+        """Use two left clicks for display range and a right click for an isophote."""
+        if event.inaxes is not self.histogram_axes or event.xdata is None:
+            return
+        value = float(event.xdata)
+        if event.button is MouseButton.RIGHT:
+            self._isophote_value = value
+            self._draw_isophote()
+            self._draw_histogram()
+            return
+        if event.button is not MouseButton.LEFT:
+            return
+        if self._histogram_click_state is None:
+            self._histogram_click_state = value
+            self._detail.set(
+                f"表示範囲の下限候補: {value:.3f}。続けて上限をクリックしてください。"
+            )
+            return
+        low, high = sorted((self._histogram_click_state, value))
+        if np.isclose(low, high):
+            self._detail.set("表示範囲の上下限は異なる値を選択してください。")
+            self._histogram_click_state = None
+            return
+        self._intensity_range = (low, high)
+        self._histogram_click_state = None
+        self._apply_image_display_options()
+        self._draw_histogram()
+
+    def _apply_image_display_options(self) -> None:
+        """Apply selected intensity limits and refresh the image overlay."""
+        if self._image_artist is not None:
+            if self._intensity_range is None:
+                self._image_artist.set_clim(None, None)
+            else:
+                self._image_artist.set_clim(*self._intensity_range)
+        self._draw_isophote()
+
+    def _draw_isophote(self) -> None:
+        """Draw the selected constant-intensity contour over the solar image."""
+        if self._isophote_artist is not None:
+            try:
+                self._isophote_artist.remove()
+            except (AttributeError, ValueError):
+                pass
+            self._isophote_artist = None
+        if self._last_image is None or self._isophote_value is None:
+            self.canvas.draw_idle()
+            return
+        image = np.asarray(self._last_image, dtype=float)
+        if image.ndim == 3:
+            image = np.mean(image[..., :3], axis=2)
+        finite = image[np.isfinite(image)]
+        if finite.size and float(finite.min()) < self._isophote_value < float(finite.max()):
+            contour_set = self.axes.contour(
+                image,
+                levels=[self._isophote_value],
+                colors=["cyan"],
+                linewidths=1.0,
+            )
+            self._isophote_artist = contour_set
+        self.canvas.draw_idle()
+
+    def _reset_intensity_range(self) -> None:
+        """Restore automatic image contrast from the full image data range."""
+        self._intensity_range = None
+        self._histogram_click_state = None
+        self._apply_image_display_options()
+        self._draw_histogram()
+
+    def _clear_isophote(self) -> None:
+        """Remove the currently selected isophote contour."""
+        self._isophote_value = None
+        self._draw_isophote()
+        self._draw_histogram()
 
     def _draw_brightness_profiles(self) -> None:
         """Render the original brightness/gradient mini-graphs in a scrollable pane."""
