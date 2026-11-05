@@ -12,7 +12,7 @@ import pathlib
 import warnings
 from dataclasses import dataclass, fields, replace
 from pprint import pformat, pprint
-from typing import Any
+from typing import Any, Protocol
 
 import cv2
 import matplotlib.pyplot as plt
@@ -25,7 +25,7 @@ if __package__:
 else:  # 直接実行時
     from image_loader import load_image
 
-version = "MIN2 v2.4.4"  # limb_wigthの割合指定を修正
+version = "MIN2 v2.5.0"  # trial circle / iteration の手動レビューに対応
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -82,6 +82,7 @@ class MIN2Config:
     show: bool = False  # 結果を描画するか
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
+    interactive_review: bool = False  # trial circle / 各反復で手動レビューするか
     dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
 
     def __post_init__(self) -> None:
@@ -645,10 +646,40 @@ def show_circle_simple(
     plt.show()
 
 
+class _ReviewWindow(Protocol):
+    """Interface implemented by the persistent interactive review window."""
+
+    def update_processing(self, message: str) -> None:
+        """Update the processing message."""
+
+    def review(
+        self,
+        image: np.ndarray,
+        spots: list[list[float]],
+        circle: tuple[float, float, float],
+        title: str,
+    ) -> list[list[float]]:
+        """Show the current points and wait for the user's selection."""
+        ...
+
+
+def _review_points_interactively(
+    image: np.ndarray,
+    spots: list[list[float]],
+    cir_stat: tuple[float, float, float],
+    title: str,
+    review_ui: _ReviewWindow,
+) -> list[list[float]]:
+    """Show edge points in the persistent UI and wait for manual review."""
+    if not spots:
+        return spots
+    return review_ui.review(image, spots, cir_stat, title)
+
+
 # ---------------------------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------------------------
-def MIN2_ignore_sunspots(
+def _MIN2_ignore_sunspots_core(
     img_inst: np.ndarray | str = "PATH",
     n: int | None = None,
     light_threshold: int | None = None,
@@ -659,6 +690,8 @@ def MIN2_ignore_sunspots(
     img_path: pathlib.Path | str | None = "",
     show_simple: bool | None = None,
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
+    interactive_review: bool | None = None,
+    review_ui: _ReviewWindow | None = None,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -677,8 +710,9 @@ def MIN2_ignore_sunspots(
         img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
         show_simple (bool | None): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
         config: 設定。YAMLのパス / dict / MIN2Config / None。None なら既定値(自動探索はしない)。
+        interactive_review (bool | None): 初回 trial circle と各反復の開始時に点群を表示し、クリックで手動除外できるようにする。
 
-    上記の n〜show_simple は None のとき config の値、config にも無ければ既定値を使います。
+    上記の設定引数は None のとき config の値、config にも無ければ既定値を使います。
     明示的に渡した引数が常に最優先です。
 
     Returns
@@ -709,9 +743,14 @@ def MIN2_ignore_sunspots(
     show = cfg.show if show is None else show
     debug = cfg.debug if debug is None else debug
     show_simple = cfg.show_simple if show_simple is None else show_simple
+    interactive_review = (
+        cfg.interactive_review if interactive_review is None else interactive_review
+    )
 
     if n < 2:
         raise ValueError("分割数 n は 2 以上にしてください。")
+    if interactive_review and review_ui is None:
+        raise RuntimeError("interactive_review には UI コントローラーが必要です。")
 
     path_obj = pathlib.Path(img_path) if img_path else None
     if isinstance(img_inst, str):
@@ -727,6 +766,8 @@ def MIN2_ignore_sunspots(
         readed_img = img_inst
 
     image = _to_gray(readed_img)  # カラー画像でも2次元で扱えるようにする
+    if review_ui is not None:
+        review_ui.update_processing("画像を読み込みました。輪郭点をサンプリングしています。")
     divnum, img = n, image
     height, width = image.shape[:2]
 
@@ -736,10 +777,26 @@ def MIN2_ignore_sunspots(
     spots = cut_and_sampling(image, light_threshold, n)
     if debug:
         pprint(spots)
-    cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
+    if review_ui is not None:
+        review_ui.update_processing("初回の近似円を計算しています。")
+    cx, cy, r = fit_circle(spots, show and not interactive_review, image, n)  # 一回目の円情報
+    if interactive_review:
+        assert review_ui is not None
+        reviewed_spots = _review_points_interactively(
+            image, spots, (cx, cy, r), "試行円：検出点の確認", review_ui
+        )
+        if len(reviewed_spots) < len(spots):
+            try:
+                reviewed_circle = fit_circle(reviewed_spots, show and not interactive_review, image, n)
+            except ValueError as e:
+                print(f"[WARN]:手動除外後に円を作れないため、変更を破棄します。({e})")
+            else:
+                spots = reviewed_spots
+                cx, cy, r = reviewed_circle
+
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
-        if show:
+        if show and not interactive_review:
             show_circle(
                 img_inst=image,
                 spots=spots,
@@ -755,6 +812,26 @@ def MIN2_ignore_sunspots(
     safe_points = list(spots)
 
     for cycle in range(1, iter_cycles + 1):
+        if review_ui is not None:
+            review_ui.update_processing(f"反復 {cycle} を処理しています。")
+        if interactive_review:
+            assert review_ui is not None
+            reviewed_points = _review_points_interactively(
+                image,
+                safe_points,
+                (cx, cy, r),
+                f"反復 {cycle}：残存点の確認",
+                review_ui,
+            )
+            if len(reviewed_points) < len(safe_points):
+                try:
+                    reviewed_circle = fit_circle(reviewed_points, show, image, n)
+                except ValueError as e:
+                    print(f"[WARN]:手動除外後に円を作れないため、変更を破棄します。({e})")
+                else:
+                    safe_points = reviewed_points
+                    cx, cy, r = reviewed_circle
+
         if limb_width_ratio is not None:
             current_limb_width = r * limb_width_ratio
         else:
@@ -781,14 +858,14 @@ def MIN2_ignore_sunspots(
             break
         try:
             cxo, cyo, ro = fit_circle(
-                np.array(outside_spots, dtype=float), show, image, n
+                np.array(outside_spots, dtype=float), show and not interactive_review, image, n
             )
         except ValueError as e:
             print(f"[WARN]:外側の点から円を作れないため、黒点排除を打ち切ります。({e})")
             break
         if debug:
             print(f"[INFO]:outside circle (cx,cy,r)={cxo, cyo, ro}")
-            if show:
+            if show and not interactive_review:
                 show_circle(
                     img_inst=image,
                     spots=outside_spots,
@@ -844,9 +921,9 @@ def MIN2_ignore_sunspots(
             print("[WARN]:黒点除外後の点が3点未満のため、直前の円を採用します。")
             break
         # 黒点とみなされない点だけで円を作成
-        cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show, image, n)
+        cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show and not interactive_review, image, n)
 
-    if show:
+    if show and not interactive_review:
         show_circle(
             img_inst=image,
             spots=safe_points,
@@ -856,7 +933,74 @@ def MIN2_ignore_sunspots(
             simple=show_simple,
             n=n,
         )
+    if review_ui is not None:
+        review_ui.update_processing("最終結果を表示しています。")
     return (cx, cy), r
+
+
+def MIN2_ignore_sunspots(
+    img_inst: np.ndarray | str = "PATH",
+    n: int | None = None,
+    light_threshold: int | None = None,
+    limb_wigth: int | str | None = None,
+    iter_cycles: int | None = None,
+    show: bool | None = None,
+    debug: bool | None = None,
+    img_path: pathlib.Path | str | None = "",
+    show_simple: bool | None = None,
+    config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
+    interactive_review: bool | None = None,
+) -> tuple[tuple[float, float], float]:
+    """Detect a solar disk and optionally review all stages in one Tkinter window.
+
+    When interactive review is enabled, one Tkinter window is created before
+    detection starts. Detection runs in a worker thread while the embedded plot
+    canvas is reused for each review stage and the final result.
+    """
+    cfg = load_config(config)
+    review_enabled = (
+        cfg.interactive_review if interactive_review is None else interactive_review
+    )
+    if not review_enabled:
+        return _MIN2_ignore_sunspots_core(
+            img_inst=img_inst,
+            n=n,
+            light_threshold=light_threshold,
+            limb_wigth=limb_wigth,
+            iter_cycles=iter_cycles,
+            show=show,
+            debug=debug,
+            img_path=img_path,
+            show_simple=show_simple,
+            config=cfg,
+            interactive_review=False,
+        )
+
+    if __package__:
+        from .interactive_review import InteractiveReviewWindow
+    else:
+        from interactive_review import InteractiveReviewWindow
+
+    review_window = InteractiveReviewWindow()
+
+    def run_detection() -> tuple[tuple[float, float], float]:
+        """Run the existing detector with the persistent review controller."""
+        return _MIN2_ignore_sunspots_core(
+            img_inst=img_inst,
+            n=n,
+            light_threshold=light_threshold,
+            limb_wigth=limb_wigth,
+            iter_cycles=iter_cycles,
+            show=show,
+            debug=debug,
+            img_path=img_path,
+            show_simple=show_simple,
+            config=cfg,
+            interactive_review=True,
+            review_ui=review_window,
+        )
+
+    return review_window.run(run_detection)
 
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:

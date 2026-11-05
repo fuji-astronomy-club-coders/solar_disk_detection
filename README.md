@@ -12,7 +12,7 @@
 ## プロジェクト構造
 
 ```text
-solar_disk_detection-MIN2_v2.4.0/
+solar_disk_detection-MIN2_v2.5.0/
 ├── min2/
 │   ├── __init__.py        # バージョン情報の定義
 │   └── MIN2ver2.py        # 円検出・黒点除外処理コアロジック
@@ -136,6 +136,10 @@ MIN2_ignore_sunspots(img_path="sun.png", config="min2_config.yaml")
 
 # dict でも可。明示引数（n=12）は YAML より優先
 MIN2_ignore_sunspots(img_path="sun.png", config={"n": 8}, n=12)
+
+# 初回 trial circle と各反復で点群を確認し、クリックで外れ点を除外
+MIN2_ignore_sunspots(img_path="sun.png", interactive_review=True)
+# 1つのTkinterウィンドウ内で処理状態とプレビューを切り替える
 ```
 
 CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG` → `./min2_config.yaml` → `MIN2ver2.py` と同じフォルダ、の順に探します（無ければ既定値）。ライブラリ呼び出しでは自動探索せず、`config=` を渡したときだけ読み込みます。
@@ -144,7 +148,7 @@ CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG
 python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 ```
 
-キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。
+キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `interactive_review`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。
 
 ---
 
@@ -167,6 +171,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 | `debug` | `bool` | `False` | ログ出力や途中経過の描写（`show=True` 時）を行うデバッグモード。 |
 | `img_path` | `Path | str | None` | `""` | 処理対象画像のファイルパス（`img_inst="PATH"` 時は必須）。 |
 | `show_simple` | `bool` | `False` | `True` に設定すると、各エッジプロファイルを省いたシンプルな画像のみを表示します。 |
+| `interactive_review` | `bool` | `False` | `True` にするとTkinterウィンドウを1つ起動します。処理中表示・各反復プレビュー・最終結果を同じ画面で更新します。画像ツールバー、縁近傍輝度グラフの表示切替、点／矩形／自由範囲による外れ点の除外に対応します。 |
 
 #### 戻り値
 
@@ -201,9 +206,28 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 ---
 
+### インタラクティブレビューの操作
+
+`interactive_review: true` を有効にすると、Tkinter ウィンドウ内に画像プレビューと操作ツールバーを表示します。
+
+- **画像操作**: Matplotlib のホーム、戻る／進む、パン、ズーム、サブプロット設定、画像保存を利用できます。
+- **輝度グラフ**: 「縁近傍の輝度グラフを表示」をオン／オフすると、各検出点の前後15ピクセルの輝度と一次微分を確認できます。グラフは右側のスクロール領域に表示されます。
+- **点選択**: 「点をクリック」を選ぶと、個々の検出点をクリックして除外／復帰できます。
+- **矩形範囲**: 「矩形範囲」を選び、画像をドラッグすると、範囲内の検出点をまとめて除外できます。
+- **自由範囲**: 「自由範囲」を選び、画像上を囲むようにドラッグすると、ポリゴン内の検出点をまとめて除外できます。
+- **適用／取消**: 「選択を適用」で反映し、「変更を取り消す」でレビュー開始時の点群に戻します。円の計算に必要な3点未満にはできません。
+
+矩形／自由範囲選択を使うときは、画像ツールバーのパン／ズームを解除してください。選択した範囲にある点だけを除外対象にし、点をクリックすれば個別に復帰できます。
+
+- **近傍輝度グラフ**: レビュー画面では初期状態で表示します。検出点ごとに縁近傍 ±15 ピクセルの輝度（オレンジ）と一次微分（シアン）を1列で表示し、縦スクロールして確認できます。表示領域は画像より広く確保し、グラフの縦幅は1点あたり3.6インチです。
+- **表示切り替え**: 「縁近傍の輝度グラフを表示」のチェックを外すとグラフ領域を隠し、画像を広く表示できます。再度チェックするとグラフを表示します。
+- **Matplotlib画像操作**: 画像下部のツールバーからホーム、表示履歴、パン、ズーム、レイアウト調整、画像保存を利用できます。
+
+---
+
 ## モジュール定数・グローバル変数
 
-* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.4.0"`）。
+* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.5.0"`）。
 * **`DIR_X_LINE` (`0`)**: 横方向走査線で検出したエッジ点を示すフラグ。
 * **`DIR_Y_LINE` (`1`)**: 縦方向走査線で検出したエッジ点を示すフラグ。
 
@@ -213,7 +237,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 バージョン 2.3.5 以前の旧コードでは、グローバル変数 (`img`, `divnum`, `height`, `width`) や `"GLOBAL"` パラメータに依存した実装が行われていました。
 
-本バージョン（v2.4.0）では以下の改善および互換性処理が行われています。
+本バージョン（v2.5.0）では以下の改善および互換性処理が行われています。
 
 1. **グローバル変数依存の脱却**:
 * 内部処理はすべて関数引数経由での受け渡しに統一され、マルチスレッド環境や複数画像の連続処理時の安全性が向上しました。
