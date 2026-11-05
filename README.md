@@ -121,7 +121,7 @@ python -m min2.MIN2ver2 path/to/folder --dir
 ## 設定（YAML は任意）
 
 パラメータは YAML で制御できますが、**YAML なしでも、PyYAML 未インストールでも動作します**（既定値はコード内の `MIN2Config` が持っています）。
-`min2/MIN2ver2.py` は他ファイルに依存しないため、パッケージとして使う場合も、このファイル単体をコピーして使う場合も同じ設定の仕組みが使えます。
+画像読み込み処理は `min2/image_loader.py` に分離しています。MIN2 を単体で配置する場合は `MIN2ver2.py` と `image_loader.py` を同じフォルダに置いてください。
 
 優先順位: **関数/CLI の明示引数 > YAML（dict / `MIN2Config`）> コード内の既定値**
 
