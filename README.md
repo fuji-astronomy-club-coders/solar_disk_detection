@@ -139,6 +139,7 @@ MIN2_ignore_sunspots(img_path="sun.png", config={"n": 8}, n=12)
 
 # 初回 trial circle と各反復で点群を確認し、クリックで外れ点を除外
 MIN2_ignore_sunspots(img_path="sun.png", interactive_review=True)
+# 1つのTkinterウィンドウ内で処理状態とプレビューを切り替える
 ```
 
 CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG` → `./min2_config.yaml` → `MIN2ver2.py` と同じフォルダ、の順に探します（無ければ既定値）。ライブラリ呼び出しでは自動探索せず、`config=` を渡したときだけ読み込みます。
@@ -170,7 +171,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 | `debug` | `bool` | `False` | ログ出力や途中経過の描写（`show=True` 時）を行うデバッグモード。 |
 | `img_path` | `Path | str | None` | `""` | 処理対象画像のファイルパス（`img_inst="PATH"` 時は必須）。 |
 | `show_simple` | `bool` | `False` | `True` に設定すると、各エッジプロファイルを省いたシンプルな画像のみを表示します。 |
-| `interactive_review` | `bool` | `False` | `True` にすると初回 trial circle と各反復で点群を表示し、クリックで点を除外・復帰できます。Enter で適用、Esc で変更を破棄します。 |
+| `interactive_review` | `bool` | `False` | `True` にすると、最初にTkinterウィンドウを1つ起動します。処理中表示・各反復の点群プレビュー・最終結果を同じウィンドウ内で更新し、点をクリックして除外・復帰できます。 |
 
 #### 戻り値
 
