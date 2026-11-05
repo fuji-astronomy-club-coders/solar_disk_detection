@@ -98,8 +98,8 @@ class InteractiveReviewTests(unittest.TestCase):
             )
 
         self.assertEqual(review.call_count, 2)
-        self.assertEqual(review.call_args_list[0].args[3], "trial circle：検出点の確認")
-        self.assertEqual(review.call_args_list[1].args[3], "反復 1：残存点の確認")
+        self.assertEqual(review.call_args_list[0].args[3], "Trial circle")
+        self.assertEqual(review.call_args_list[1].args[3], "反復 1")
 
 
 if __name__ == "__main__":
