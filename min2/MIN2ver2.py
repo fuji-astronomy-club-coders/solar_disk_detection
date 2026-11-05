@@ -20,9 +20,9 @@ import numpy as np
 from matplotlib import gridspec
 from matplotlib.patches import Circle
 
-try:
+if __package__:
     from .image_loader import load_image
-except ImportError:  # 直接実行・単体配置時の互換性
+else:  # 直接実行時
     from image_loader import load_image
 
 version = "MIN2 v2.4.3"  # limb_wigthの割合指定を修正
