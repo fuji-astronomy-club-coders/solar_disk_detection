@@ -17,9 +17,11 @@ from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.collections import PathCollection
 from matplotlib.figure import Figure
+from matplotlib.image import AxesImage
 from matplotlib.gridspec import GridSpec
 from matplotlib.path import Path
 from matplotlib.patches import Circle
+from matplotlib.text import Annotation
 from matplotlib.widgets import LassoSelector, RectangleSelector
 
 PointList = list[list[float]]
@@ -138,9 +140,9 @@ class InteractiveReviewWindow:
         self._last_image: np.ndarray | None = None
         self._excluded_indices: set[int] = set()
         self._scatter: PathCollection | None = None
-        self._image_artist = None
+        self._image_artist: AxesImage | None = None
         self._circle_artist: Circle | None = None
-        self._point_annotations = []
+        self._point_annotations: list[Annotation] = []
         self._rectangle_selector: RectangleSelector | None = None
         self._lasso_selector: LassoSelector | None = None
         self._selection_mode = tk.StringVar(value="point")
@@ -204,6 +206,7 @@ class InteractiveReviewWindow:
         self._plot_frame.grid(row=4, column=0, sticky=tk.NSEW)
         self._plot_frame.columnconfigure(0, weight=3)
         self._plot_frame.columnconfigure(1, weight=2)
+        self._plot_frame.rowconfigure(0, weight=1)
         self._plot_frame.rowconfigure(0, weight=1)
 
         self._image_frame = ttk.Frame(self._plot_frame)
@@ -425,6 +428,7 @@ class InteractiveReviewWindow:
         self._review_controls.pack(side=tk.RIGHT)
         self._close_button.pack_forget()
         self._draw_review_points()
+        self._toggle_profiles()
         self._update_selection_mode()
 
     def _draw_review_points(self) -> None:
@@ -490,8 +494,6 @@ class InteractiveReviewWindow:
             f"除外点: {len(self._excluded_indices)}"
         )
         self.canvas.draw_idle()
-        if self._show_profiles.get():
-            self._draw_brightness_profiles()
 
     def _toggle_profiles(self) -> None:
         """Show or hide the edge-neighborhood brightness graphs."""
