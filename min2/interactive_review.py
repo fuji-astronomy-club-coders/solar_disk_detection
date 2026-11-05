@@ -16,6 +16,7 @@ from matplotlib.backend_bases import KeyEvent, MouseButton, MouseEvent, PickEven
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.collections import PathCollection
+from matplotlib.contour import ContourSet
 from matplotlib.figure import Figure
 from matplotlib.image import AxesImage
 from matplotlib.gridspec import GridSpec
@@ -146,7 +147,7 @@ class InteractiveReviewWindow:
         self._histogram_click_state: float | None = None
         self._intensity_range: tuple[float, float] | None = None
         self._isophote_value: float | None = None
-        self._isophote_artist: object | None = None
+        self._isophote_artist: ContourSet | None = None
         self._rectangle_selector: RectangleSelector | None = None
         self._lasso_selector: LassoSelector | None = None
         self._selection_mode = tk.StringVar(value="point")
@@ -598,7 +599,7 @@ class InteractiveReviewWindow:
         """Apply selected intensity limits and refresh the image overlay."""
         if self._image_artist is not None:
             if self._intensity_range is None:
-                self._image_artist.set_clim(None, None)
+                self._image_artist.autoscale()
             else:
                 self._image_artist.set_clim(*self._intensity_range)
         self._draw_isophote()
