@@ -670,6 +670,8 @@ def _review_points_interactively(
     review_ui: _ReviewWindow,
 ) -> list[list[float]]:
     """Show edge points in the persistent UI and wait for manual review."""
+    if not spots:
+        return spots
     return review_ui.review(image, spots, cir_stat, title)
 
 
@@ -776,7 +778,7 @@ def _MIN2_ignore_sunspots_core(
         pprint(spots)
     if review_ui is not None:
         review_ui.update_processing("初回の近似円を計算しています。")
-    cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
+    cx, cy, r = fit_circle(spots, show and not interactive_review, image, n)  # 一回目の円情報
     if interactive_review:
         assert review_ui is not None
         reviewed_spots = _review_points_interactively(
@@ -784,7 +786,7 @@ def _MIN2_ignore_sunspots_core(
         )
         if len(reviewed_spots) < len(spots):
             try:
-                reviewed_circle = fit_circle(reviewed_spots, show, image, n)
+                reviewed_circle = fit_circle(reviewed_spots, show and not interactive_review, image, n)
             except ValueError as e:
                 print(f"[WARN]:手動除外後に円を作れないため、変更を破棄します。({e})")
             else:
@@ -855,7 +857,7 @@ def _MIN2_ignore_sunspots_core(
             break
         try:
             cxo, cyo, ro = fit_circle(
-                np.array(outside_spots, dtype=float), show, image, n
+                np.array(outside_spots, dtype=float), show and not interactive_review, image, n
             )
         except ValueError as e:
             print(f"[WARN]:外側の点から円を作れないため、黒点排除を打ち切ります。({e})")
@@ -918,7 +920,7 @@ def _MIN2_ignore_sunspots_core(
             print("[WARN]:黒点除外後の点が3点未満のため、直前の円を採用します。")
             break
         # 黒点とみなされない点だけで円を作成
-        cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show, image, n)
+        cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show and not interactive_review, image, n)
 
     if show and not interactive_review:
         show_circle(
