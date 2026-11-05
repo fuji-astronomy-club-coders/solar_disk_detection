@@ -12,13 +12,12 @@ import pathlib
 import warnings
 from dataclasses import dataclass, fields, replace
 from pprint import pformat, pprint
-from typing import Any, cast
+from typing import Any, Protocol
 
 import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
-from matplotlib.backend_bases import KeyEvent, PickEvent
 from matplotlib.patches import Circle
 
 if __package__:
@@ -647,134 +646,37 @@ def show_circle_simple(
     plt.show()
 
 
+class _ReviewWindow(Protocol):
+    """Interface implemented by the persistent interactive review window."""
+
+    def update_processing(self, message: str) -> None:
+        """Update the processing message."""
+
+    def review(
+        self,
+        image: np.ndarray,
+        spots: list[list[float]],
+        circle: tuple[float, float, float],
+        title: str,
+    ) -> list[list[float]]:
+        """Show the current points and wait for the user's selection."""
+
+
 def _review_points_interactively(
     image: np.ndarray,
     spots: list[list[float]],
     cir_stat: tuple[float, float, float],
     title: str,
+    review_ui: _ReviewWindow,
 ) -> list[list[float]]:
-    """Open a clickable preview and let the user exclude suspicious edge points.
-
-    Click a point to toggle its exclusion state. Enter applies the selection,
-    Escape discards the changes, and closing the window applies the selection.
-    """
-    if not spots:
-        return spots
-
-    points = np.asarray(spots, dtype=float)
-    excluded_indices: set[int] = set()
-    apply_selection = [True]
-
-    fig, ax = plt.subplots(figsize=(9, 9))
-    ax.imshow(image, cmap="magma")
-    _draw_circle(ax, cir_stat, "orange")
-    scatter = ax.scatter(
-        points[:, 0],
-        points[:, 1],
-        c="tab:green",
-        s=85,
-        edgecolors="white",
-        linewidths=1.2,
-        picker=True,
-    )
-    for index, point in enumerate(spots):
-        ax.annotate(
-            f"#{index + 1}",
-            (float(point[0]), float(point[1])),
-            color="yellow",
-            fontsize=9,
-            xytext=(4, 4),
-            textcoords="offset points",
-        )
-
-    ax.set_title(title)
-    ax.text(
-        0.01,
-        0.99,
-        "クリック：除外／復帰   |   Enter：適用   |   Esc：取消",
-        color="white",
-        fontsize=9,
-        va="top",
-        transform=ax.transAxes,
-        bbox={"facecolor": "black", "alpha": 0.65, "pad": 5},
-    )
-    status = ax.text(
-        0.01,
-        0.02,
-        f"採用点: {len(spots)} / {len(spots)}",
-        color="white",
-        fontsize=9,
-        transform=ax.transAxes,
-        bbox={"facecolor": "black", "alpha": 0.65, "pad": 4},
-    )
-    ax.axis("equal")
-
-    def refresh_selection() -> None:
-        """Refresh point colors and the selection counter."""
-        nonlocal scatter
-        colors = [
-            "tab:orange" if index in excluded_indices else "tab:green"
-            for index in range(len(spots))
-        ]
-        scatter.remove()
-        scatter = ax.scatter(
-            points[:, 0],
-            points[:, 1],
-            c=colors,
-            s=85,
-            edgecolors="white",
-            linewidths=1.2,
-            picker=True,
-        )
-        status.set_text(
-            f"採用点: {len(spots) - len(excluded_indices)} / {len(spots)}"
-        )
-        fig.canvas.draw_idle()
-
-    def on_pick(event: PickEvent) -> None:
-        """Toggle the selected point when the scatter collection is clicked."""
-        indices = cast(np.ndarray, getattr(event, "ind", np.array([], dtype=int)))
-        if event.artist is not scatter or indices.size == 0:
-            return
-        index = int(indices[0])
-        if index in excluded_indices:
-            excluded_indices.remove(index)
-        else:
-            excluded_indices.add(index)
-        refresh_selection()
-
-    def on_key(event: KeyEvent) -> None:
-        """Apply or discard the current point selection."""
-        if event.key in {"enter", "return"}:
-            plt.close(fig)
-        elif event.key == "escape":
-            apply_selection[0] = False
-            plt.close(fig)
-
-    fig.canvas.mpl_connect("pick_event", on_pick)
-    fig.canvas.mpl_connect("key_press_event", on_key)
-    fig.tight_layout()
-    plt.show(block=True)
-
-    if not apply_selection[0]:
-        return spots
-
-    reviewed_spots = [
-        point for index, point in enumerate(spots) if index not in excluded_indices
-    ]
-    if len(reviewed_spots) < 3:
-        print("[WARN]:手動除外後の点が3点未満のため、変更を破棄します。")
-        return spots
-
-    if excluded_indices:
-        print(f"[INFO]:手動レビューで {len(excluded_indices)} 点を除外しました。")
-    return reviewed_spots
+    """Show edge points in the persistent UI and wait for manual review."""
+    return review_ui.review(image, spots, cir_stat, title)
 
 
 # ---------------------------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------------------------
-def MIN2_ignore_sunspots(
+def _MIN2_ignore_sunspots_core(
     img_inst: np.ndarray | str = "PATH",
     n: int | None = None,
     light_threshold: int | None = None,
@@ -786,6 +688,7 @@ def MIN2_ignore_sunspots(
     show_simple: bool | None = None,
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
     interactive_review: bool | None = None,
+    review_ui: _ReviewWindow | None = None,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -843,6 +746,8 @@ def MIN2_ignore_sunspots(
 
     if n < 2:
         raise ValueError("分割数 n は 2 以上にしてください。")
+    if interactive_review and review_ui is None:
+        raise RuntimeError("interactive_review には UI コントローラーが必要です。")
 
     path_obj = pathlib.Path(img_path) if img_path else None
     if isinstance(img_inst, str):
@@ -858,6 +763,8 @@ def MIN2_ignore_sunspots(
         readed_img = img_inst
 
     image = _to_gray(readed_img)  # カラー画像でも2次元で扱えるようにする
+    if review_ui is not None:
+        review_ui.update_processing("画像を読み込みました。輪郭点をサンプリングしています。")
     divnum, img = n, image
     height, width = image.shape[:2]
 
@@ -867,10 +774,13 @@ def MIN2_ignore_sunspots(
     spots = cut_and_sampling(image, light_threshold, n)
     if debug:
         pprint(spots)
+    if review_ui is not None:
+        review_ui.update_processing("初回の近似円を計算しています。")
     cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
     if interactive_review:
+        assert review_ui is not None
         reviewed_spots = _review_points_interactively(
-            image, spots, (cx, cy, r), "trial circle：検出点の確認"
+            image, spots, (cx, cy, r), "Trial circle", review_ui
         )
         if len(reviewed_spots) < len(spots):
             try:
@@ -899,12 +809,16 @@ def MIN2_ignore_sunspots(
     safe_points = list(spots)
 
     for cycle in range(1, iter_cycles + 1):
+        if review_ui is not None:
+            review_ui.update_processing(f"反復 {cycle} を処理しています。")
         if interactive_review:
+            assert review_ui is not None
             reviewed_points = _review_points_interactively(
                 image,
                 safe_points,
                 (cx, cy, r),
-                f"反復 {cycle}：残存点の確認",
+                f"反復 {cycle}",
+                review_ui,
             )
             if len(reviewed_points) < len(safe_points):
                 try:
@@ -1006,7 +920,7 @@ def MIN2_ignore_sunspots(
         # 黒点とみなされない点だけで円を作成
         cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show, image, n)
 
-    if show:
+    if show and not interactive_review:
         show_circle(
             img_inst=image,
             spots=safe_points,
@@ -1016,7 +930,74 @@ def MIN2_ignore_sunspots(
             simple=show_simple,
             n=n,
         )
+    if review_ui is not None:
+        review_ui.update_processing("最終結果を表示しています。")
     return (cx, cy), r
+
+
+def MIN2_ignore_sunspots(
+    img_inst: np.ndarray | str = "PATH",
+    n: int | None = None,
+    light_threshold: int | None = None,
+    limb_wigth: int | str | None = None,
+    iter_cycles: int | None = None,
+    show: bool | None = None,
+    debug: bool | None = None,
+    img_path: pathlib.Path | str | None = "",
+    show_simple: bool | None = None,
+    config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
+    interactive_review: bool | None = None,
+) -> tuple[tuple[float, float], float]:
+    """Detect a solar disk and optionally review all stages in one Tkinter window.
+
+    When interactive review is enabled, one Tkinter window is created before
+    detection starts. Detection runs in a worker thread while the embedded plot
+    canvas is reused for each review stage and the final result.
+    """
+    cfg = load_config(config)
+    review_enabled = (
+        cfg.interactive_review if interactive_review is None else interactive_review
+    )
+    if not review_enabled:
+        return _MIN2_ignore_sunspots_core(
+            img_inst=img_inst,
+            n=n,
+            light_threshold=light_threshold,
+            limb_wigth=limb_wigth,
+            iter_cycles=iter_cycles,
+            show=show,
+            debug=debug,
+            img_path=img_path,
+            show_simple=show_simple,
+            config=cfg,
+            interactive_review=False,
+        )
+
+    if __package__:
+        from .interactive_review import InteractiveReviewWindow
+    else:
+        from interactive_review import InteractiveReviewWindow
+
+    review_window = InteractiveReviewWindow()
+
+    def run_detection() -> tuple[tuple[float, float], float]:
+        """Run the existing detector with the persistent review controller."""
+        return _MIN2_ignore_sunspots_core(
+            img_inst=img_inst,
+            n=n,
+            light_threshold=light_threshold,
+            limb_wigth=limb_wigth,
+            iter_cycles=iter_cycles,
+            show=show,
+            debug=debug,
+            img_path=img_path,
+            show_simple=show_simple,
+            config=cfg,
+            interactive_review=True,
+            review_ui=review_window,
+        )
+
+    return review_window.run(run_detection)
 
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:
