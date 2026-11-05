@@ -516,16 +516,29 @@ class InteractiveReviewWindow:
             n=10,
             window_size=15,
         )
-        columns = 2
-        rows = max(1, (len(profiles) + columns - 1) // columns)
+        # Give every edge point a full-width row.  A two-column layout
+        # makes titles, tick labels, and traces unreadable on a narrow pane.
+        columns = 1
+        rows = max(1, len(profiles))
+        row_height_inches = 1.9
+        figure_width_inches = 6.0
+        figure_height_inches = max(2.4, rows * row_height_inches)
         self.profile_figure.clear()
-        self.profile_figure.set_size_inches(5.1, max(2.8, rows * 1.6), forward=True)
-        grid = GridSpec(rows, columns, figure=self.profile_figure, hspace=0.65, wspace=0.45)
+        self.profile_figure.set_size_inches(
+            figure_width_inches,
+            figure_height_inches,
+            forward=True,
+        )
+        # TkAgg does not reliably resize its Tk widget when only the Figure
+        # size changes, so explicitly resize the widget to match the scrollable
+        # figure's requested height.
+        self.profile_canvas.get_tk_widget().configure(
+            height=round(figure_height_inches * self.profile_figure.dpi),
+        )
+        grid = GridSpec(rows, columns, figure=self.profile_figure, hspace=0.9)
 
         for index, (coordinates, brightness, gradient) in enumerate(profiles):
-            axis = self.profile_figure.add_subplot(
-                grid[index // columns, index % columns]
-            )
+            axis = self.profile_figure.add_subplot(grid[index, 0])
             axis.set_title(f"#{index + 1}", fontsize=9, fontweight="bold")
             axis.plot(
                 coordinates,
