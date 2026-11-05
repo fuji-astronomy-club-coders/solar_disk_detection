@@ -13,7 +13,7 @@ from typing import cast
 
 import numpy as np
 from matplotlib.backend_bases import KeyEvent, PickEvent
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.collections import PathCollection
 from matplotlib.figure import Figure
 from matplotlib.patches import Circle
@@ -105,14 +105,6 @@ class InteractiveReviewWindow:
         self.canvas = FigureCanvasTkAgg(self.figure, master=plot_frame)
         self.canvas_widget = self.canvas.get_tk_widget()
         self.canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
-
-        toolbar = NavigationToolbar2Tk(
-            self.canvas,
-            plot_frame,
-            pack_toolbar=False,
-        )
-        toolbar.update()
-        toolbar.pack(side=tk.BOTTOM, fill=tk.X)
 
         footer = ttk.Frame(outer)
         footer.pack(fill=tk.X, pady=(8, 0))
