@@ -12,7 +12,7 @@ from tkinter import ttk
 from typing import cast
 
 import numpy as np
-from matplotlib.backend_bases import KeyEvent, MouseEvent, PickEvent
+from matplotlib.backend_bases import KeyEvent, MouseButton, MouseEvent, PickEvent
 from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.collections import PathCollection
@@ -573,7 +573,7 @@ class InteractiveReviewWindow:
                 self.axes,
                 self._on_rectangle_select,
                 useblit=True,
-                button=[1],
+                button=[MouseButton.LEFT],
                 minspanx=1,
                 minspany=1,
                 spancoords="data",
@@ -586,7 +586,7 @@ class InteractiveReviewWindow:
                 self.axes,
                 self._on_lasso_select,
                 useblit=True,
-                button=1,
+                button=MouseButton.LEFT,
                 props={"color": "tab:blue", "linewidth": 1.5},
             )
             self._detail.set("画像上をドラッグして自由範囲を描きます。範囲内の点を除外します。")
