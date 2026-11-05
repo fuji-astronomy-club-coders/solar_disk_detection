@@ -657,21 +657,25 @@ class InteractiveReviewWindow:
         # makes titles, tick labels, and traces unreadable on a narrow pane.
         columns = 1
         rows = max(1, len(profiles))
-        row_height_inches = 1.9
+        # Allocate a genuinely tall row for every profile.  The previous
+        # 1.9-inch rows were still too compressed when many edge points existed.
+        row_height_inches = 3.6
         figure_width_inches = 6.0
-        figure_height_inches = max(2.4, rows * row_height_inches)
+        figure_height_inches = max(3.6, rows * row_height_inches)
         self.profile_figure.clear()
         self.profile_figure.set_size_inches(
             figure_width_inches,
             figure_height_inches,
             forward=True,
         )
-        # TkAgg does not reliably resize its Tk widget when only the Figure
-        # size changes, so explicitly resize the widget to match the scrollable
-        # figure's requested height.
-        self.profile_canvas.get_tk_widget().configure(
-            height=round(figure_height_inches * self.profile_figure.dpi),
-        )
+        requested_height = round(figure_height_inches * self.profile_figure.dpi)
+        profile_widget = self.profile_canvas.get_tk_widget()
+        # Keep both the scrollable frame and TkAgg canvas at the Figure's
+        # full requested height; otherwise Tk geometry propagation can
+        # compress all subplots into the viewport height.
+        self._profile_inner.configure(height=requested_height)
+        self._profile_inner.pack_propagate(False)
+        profile_widget.configure(height=requested_height)
         grid = GridSpec(rows, columns, figure=self.profile_figure, hspace=0.9)
 
         for index, (coordinates, brightness, gradient) in enumerate(profiles):
