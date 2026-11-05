@@ -18,6 +18,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
+from matplotlib.backend_bases import KeyEvent, PickEvent
 from matplotlib.patches import Circle
 
 if __package__:
@@ -721,7 +722,7 @@ def _review_points_interactively(
         )
         fig.canvas.draw_idle()
 
-    def on_pick(event: Any) -> None:
+    def on_pick(event: PickEvent) -> None:
         """Toggle the selected point when the scatter collection is clicked."""
         if event.artist is not scatter or len(event.ind) == 0:
             return
@@ -732,7 +733,7 @@ def _review_points_interactively(
             excluded_indices.add(index)
         refresh_selection()
 
-    def on_key(event: Any) -> None:
+    def on_key(event: KeyEvent) -> None:
         """Apply or discard the current point selection."""
         if event.key in {"enter", "return"}:
             plt.close(fig)
