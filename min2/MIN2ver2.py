@@ -783,7 +783,7 @@ def _MIN2_ignore_sunspots_core(
     if interactive_review:
         assert review_ui is not None
         reviewed_spots = _review_points_interactively(
-            image, spots, (cx, cy, r), "Trial circle", review_ui
+            image, spots, (cx, cy, r), "試行円：検出点の確認", review_ui
         )
         if len(reviewed_spots) < len(spots):
             try:
@@ -820,7 +820,7 @@ def _MIN2_ignore_sunspots_core(
                 image,
                 safe_points,
                 (cx, cy, r),
-                f"反復 {cycle}",
+                f"反復 {cycle}：残存点の確認",
                 review_ui,
             )
             if len(reviewed_points) < len(safe_points):
