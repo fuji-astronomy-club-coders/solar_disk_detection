@@ -12,7 +12,7 @@ import pathlib
 import warnings
 from dataclasses import dataclass, fields, replace
 from pprint import pformat, pprint
-from typing import Any
+from typing import Any, cast
 
 import cv2
 import matplotlib.pyplot as plt
@@ -711,12 +711,21 @@ def _review_points_interactively(
 
     def refresh_selection() -> None:
         """Refresh point colors and the selection counter."""
+        nonlocal scatter
         colors = [
             "tab:orange" if index in excluded_indices else "tab:green"
             for index in range(len(spots))
         ]
-        scatter.set_facecolors(colors)
-        scatter.set_edgecolors(colors)
+        scatter.remove()
+        scatter = ax.scatter(
+            points[:, 0],
+            points[:, 1],
+            c=colors,
+            s=85,
+            edgecolors="white",
+            linewidths=1.2,
+            picker=True,
+        )
         status.set_text(
             f"採用点: {len(spots) - len(excluded_indices)} / {len(spots)}"
         )
@@ -724,9 +733,10 @@ def _review_points_interactively(
 
     def on_pick(event: PickEvent) -> None:
         """Toggle the selected point when the scatter collection is clicked."""
-        if event.artist is not scatter or len(event.ind) == 0:
+        indices = cast(np.ndarray, getattr(event, "ind", np.array([], dtype=int)))
+        if event.artist is not scatter or indices.size == 0:
             return
-        index = int(event.ind[0])
+        index = int(indices[0])
         if index in excluded_indices:
             excluded_indices.remove(index)
         else:
