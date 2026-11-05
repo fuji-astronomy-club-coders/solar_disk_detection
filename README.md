@@ -12,7 +12,7 @@
 ## プロジェクト構造
 
 ```text
-solar_disk_detection-MIN2_v2.4.0/
+solar_disk_detection-MIN2_v2.5.0/
 ├── min2/
 │   ├── __init__.py        # バージョン情報の定義
 │   └── MIN2ver2.py        # 円検出・黒点除外処理コアロジック
@@ -136,6 +136,9 @@ MIN2_ignore_sunspots(img_path="sun.png", config="min2_config.yaml")
 
 # dict でも可。明示引数（n=12）は YAML より優先
 MIN2_ignore_sunspots(img_path="sun.png", config={"n": 8}, n=12)
+
+# 初回 trial circle と各反復で点群を確認し、クリックで外れ点を除外
+MIN2_ignore_sunspots(img_path="sun.png", interactive_review=True)
 ```
 
 CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG` → `./min2_config.yaml` → `MIN2ver2.py` と同じフォルダ、の順に探します（無ければ既定値）。ライブラリ呼び出しでは自動探索せず、`config=` を渡したときだけ読み込みます。
@@ -144,7 +147,7 @@ CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG
 python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 ```
 
-キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。
+キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `interactive_review`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。
 
 ---
 
@@ -167,6 +170,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 | `debug` | `bool` | `False` | ログ出力や途中経過の描写（`show=True` 時）を行うデバッグモード。 |
 | `img_path` | `Path | str | None` | `""` | 処理対象画像のファイルパス（`img_inst="PATH"` 時は必須）。 |
 | `show_simple` | `bool` | `False` | `True` に設定すると、各エッジプロファイルを省いたシンプルな画像のみを表示します。 |
+| `interactive_review` | `bool` | `False` | `True` にすると初回 trial circle と各反復で点群を表示し、クリックで点を除外・復帰できます。Enter で適用、Esc で変更を破棄します。 |
 
 #### 戻り値
 
@@ -203,7 +207,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 ## モジュール定数・グローバル変数
 
-* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.4.0"`）。
+* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.5.0"`）。
 * **`DIR_X_LINE` (`0`)**: 横方向走査線で検出したエッジ点を示すフラグ。
 * **`DIR_Y_LINE` (`1`)**: 縦方向走査線で検出したエッジ点を示すフラグ。
 
@@ -213,7 +217,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 バージョン 2.3.5 以前の旧コードでは、グローバル変数 (`img`, `divnum`, `height`, `width`) や `"GLOBAL"` パラメータに依存した実装が行われていました。
 
-本バージョン（v2.4.0）では以下の改善および互換性処理が行われています。
+本バージョン（v2.5.0）では以下の改善および互換性処理が行われています。
 
 1. **グローバル変数依存の脱却**:
 * 内部処理はすべて関数引数経由での受け渡しに統一され、マルチスレッド環境や複数画像の連続処理時の安全性が向上しました。
