@@ -14,6 +14,8 @@ dependencies = [
     "opencv-python==5.0.0.93",
     "PyYAML==6.0.3",
     "tqdm==4.70.0",
+    "astropy>=7.0",
+    "tifffile>=2024.8.0",
 ]
 
 [project.optional-dependencies]
