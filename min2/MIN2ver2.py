@@ -25,7 +25,7 @@ if __package__:
 else:  # 直接実行時
     from image_loader import load_image
 
-version = "MIN2 v2.4.4"  # limb_wigthの割合指定を修正
+version = "MIN2 v2.5.0"  # trial circle / iteration の手動レビューに対応
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -82,6 +82,7 @@ class MIN2Config:
     show: bool = False  # 結果を描画するか
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
+    interactive_review: bool = False  # trial circle / 各反復で手動レビューするか
     dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
 
     def __post_init__(self) -> None:
@@ -645,6 +646,120 @@ def show_circle_simple(
     plt.show()
 
 
+def _review_points_interactively(
+    image: np.ndarray,
+    spots: list[list[float]],
+    cir_stat: tuple[float, float, float],
+    title: str,
+) -> list[list[float]]:
+    """Open a clickable preview and let the user exclude suspicious edge points.
+
+    Click a point to toggle its exclusion state. Enter applies the selection,
+    Escape discards the changes, and closing the window applies the selection.
+    """
+    if not spots:
+        return spots
+
+    points = np.asarray(spots, dtype=float)
+    excluded_indices: set[int] = set()
+    apply_selection = [True]
+
+    fig, ax = plt.subplots(figsize=(9, 9))
+    ax.imshow(image, cmap="magma")
+    _draw_circle(ax, cir_stat, "orange")
+    scatter = ax.scatter(
+        points[:, 0],
+        points[:, 1],
+        c="tab:green",
+        s=85,
+        edgecolors="white",
+        linewidths=1.2,
+        picker=True,
+    )
+    for index, point in enumerate(spots):
+        ax.annotate(
+            f"#{index + 1}",
+            (float(point[0]), float(point[1])),
+            color="yellow",
+            fontsize=9,
+            xytext=(4, 4),
+            textcoords="offset points",
+        )
+
+    ax.set_title(title)
+    ax.text(
+        0.01,
+        0.99,
+        "Click: toggle exclude / restore   |   Enter: apply   |   Esc: cancel",
+        color="white",
+        fontsize=9,
+        va="top",
+        transform=ax.transAxes,
+        bbox={"facecolor": "black", "alpha": 0.65, "pad": 5},
+    )
+    status = ax.text(
+        0.01,
+        0.02,
+        f"Included: {len(spots)} / {len(spots)}",
+        color="white",
+        fontsize=9,
+        transform=ax.transAxes,
+        bbox={"facecolor": "black", "alpha": 0.65, "pad": 4},
+    )
+    ax.axis("equal")
+
+    def refresh_selection() -> None:
+        """Refresh point colors and the selection counter."""
+        colors = [
+            "tab:orange" if index in excluded_indices else "tab:green"
+            for index in range(len(spots))
+        ]
+        scatter.set_facecolors(colors)
+        scatter.set_edgecolors(colors)
+        status.set_text(
+            f"Included: {len(spots) - len(excluded_indices)} / {len(spots)}"
+        )
+        fig.canvas.draw_idle()
+
+    def on_pick(event: Any) -> None:
+        """Toggle the selected point when the scatter collection is clicked."""
+        if event.artist is not scatter or len(event.ind) == 0:
+            return
+        index = int(event.ind[0])
+        if index in excluded_indices:
+            excluded_indices.remove(index)
+        else:
+            excluded_indices.add(index)
+        refresh_selection()
+
+    def on_key(event: Any) -> None:
+        """Apply or discard the current point selection."""
+        if event.key in {"enter", "return"}:
+            plt.close(fig)
+        elif event.key == "escape":
+            apply_selection[0] = False
+            plt.close(fig)
+
+    fig.canvas.mpl_connect("pick_event", on_pick)
+    fig.canvas.mpl_connect("key_press_event", on_key)
+    fig.tight_layout()
+    plt.show(block=True)
+
+    if not apply_selection[0]:
+        return spots
+
+    reviewed_spots = [
+        point for index, point in enumerate(spots) if index not in excluded_indices
+    ]
+    if len(reviewed_spots) < 3:
+        print("[WARN]:手動除外後の点が3点未満のため、変更を破棄します。")
+        return spots
+
+    if excluded_indices:
+        print(f"[INFO]:手動レビューで {len(excluded_indices)} 点を除外しました。")
+    return reviewed_spots
+
+
 # ---------------------------------------------------------------------------
 # メイン処理
 # ---------------------------------------------------------------------------
@@ -659,6 +774,7 @@ def MIN2_ignore_sunspots(
     img_path: pathlib.Path | str | None = "",
     show_simple: bool | None = None,
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
+    interactive_review: bool | None = None,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -677,8 +793,9 @@ def MIN2_ignore_sunspots(
         img_path: 処理する画像のファイルパス("PATH"指定時は必須。配列を渡した場合は表示用の名前として使うだけ)。
         show_simple (bool | None): 描画時に詳細なグラフを省いたシンプルな表示形式を使用するかどうか。
         config: 設定。YAMLのパス / dict / MIN2Config / None。None なら既定値(自動探索はしない)。
+        interactive_review (bool | None): 初回 trial circle と各反復の開始時に点群を表示し、クリックで手動除外できるようにする。
 
-    上記の n〜show_simple は None のとき config の値、config にも無ければ既定値を使います。
+    上記の設定引数は None のとき config の値、config にも無ければ既定値を使います。
     明示的に渡した引数が常に最優先です。
 
     Returns
@@ -709,6 +826,9 @@ def MIN2_ignore_sunspots(
     show = cfg.show if show is None else show
     debug = cfg.debug if debug is None else debug
     show_simple = cfg.show_simple if show_simple is None else show_simple
+    interactive_review = (
+        cfg.interactive_review if interactive_review is None else interactive_review
+    )
 
     if n < 2:
         raise ValueError("分割数 n は 2 以上にしてください。")
@@ -737,9 +857,22 @@ def MIN2_ignore_sunspots(
     if debug:
         pprint(spots)
     cx, cy, r = fit_circle(spots, show, image, n)  # 一回目の円情報
+    if interactive_review:
+        reviewed_spots = _review_points_interactively(
+            image, spots, (cx, cy, r), "Trial circle: review sampled edge points"
+        )
+        if len(reviewed_spots) < len(spots):
+            try:
+                reviewed_circle = fit_circle(reviewed_spots, show, image, n)
+            except ValueError as e:
+                print(f"[WARN]:手動除外後に円を作れないため、変更を破棄します。({e})")
+            else:
+                spots = reviewed_spots
+                cx, cy, r = reviewed_circle
+
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
-        if show:
+        if show and not interactive_review:
             show_circle(
                 img_inst=image,
                 spots=spots,
@@ -755,6 +888,22 @@ def MIN2_ignore_sunspots(
     safe_points = list(spots)
 
     for cycle in range(1, iter_cycles + 1):
+        if interactive_review:
+            reviewed_points = _review_points_interactively(
+                image,
+                safe_points,
+                (cx, cy, r),
+                f"Iteration {cycle}: review retained edge points",
+            )
+            if len(reviewed_points) < len(safe_points):
+                try:
+                    reviewed_circle = fit_circle(reviewed_points, show, image, n)
+                except ValueError as e:
+                    print(f"[WARN]:手動除外後に円を作れないため、変更を破棄します。({e})")
+                else:
+                    safe_points = reviewed_points
+                    cx, cy, r = reviewed_circle
+
         if limb_width_ratio is not None:
             current_limb_width = r * limb_width_ratio
         else:
@@ -788,7 +937,7 @@ def MIN2_ignore_sunspots(
             break
         if debug:
             print(f"[INFO]:outside circle (cx,cy,r)={cxo, cyo, ro}")
-            if show:
+            if show and not interactive_review:
                 show_circle(
                     img_inst=image,
                     spots=outside_spots,
