@@ -66,6 +66,7 @@ class InteractiveReviewWindow:
 
         self._messages: queue.Queue[_UiMessage] = queue.Queue()
         self._active_request: _ReviewRequest | None = None
+        self._last_image: np.ndarray | None = None
         self._excluded_indices: set[int] = set()
         self._scatter: PathCollection | None = None
         self._finished = False
@@ -235,6 +236,7 @@ class InteractiveReviewWindow:
         """Display a review stage in the persistent plot canvas."""
         self._progress.stop()
         self._active_request = request
+        self._last_image = request.image
         self._excluded_indices.clear()
         self._status.set(request.title)
         self._detail.set(
@@ -371,8 +373,8 @@ class InteractiveReviewWindow:
             f"中心座標: ({cx:.2f}, {cy:.2f})    半径: {radius:.2f} pix"
         )
         self.axes.clear()
-        if self._active_request is not None:
-            self.axes.imshow(self._active_request.image, cmap="magma")
+        if self._last_image is not None:
+            self.axes.imshow(self._last_image, cmap="magma")
         self.axes.add_patch(
             Circle(
                 (cx, cy),
