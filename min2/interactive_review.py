@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import queue
 import threading
 import tkinter as tk
@@ -607,10 +608,8 @@ class InteractiveReviewWindow:
     def _draw_isophote(self) -> None:
         """Draw the selected constant-intensity contour over the solar image."""
         if self._isophote_artist is not None:
-            try:
+            with contextlib.suppress(AttributeError, ValueError):
                 self._isophote_artist.remove()
-            except (AttributeError, ValueError):
-                pass
             self._isophote_artist = None
         if self._last_image is None or self._isophote_value is None:
             self.canvas.draw_idle()
