@@ -5,22 +5,27 @@ from __future__ import annotations
 import queue
 import threading
 import tkinter as tk
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from tkinter import font as tkfont
 from tkinter import ttk
 from typing import cast
 
 import numpy as np
-from matplotlib.backend_bases import KeyEvent, PickEvent
+from matplotlib.backend_bases import KeyEvent, MouseEvent, PickEvent
+from matplotlib.backends._backend_tk import NavigationToolbar2Tk
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.collections import PathCollection
 from matplotlib.figure import Figure
+from matplotlib.gridspec import GridSpec
+from matplotlib.path import Path
 from matplotlib.patches import Circle
+from matplotlib.widgets import LassoSelector, RectangleSelector
 
 PointList = list[list[float]]
 CircleStatus = tuple[float, float, float]
 DetectionResult = tuple[tuple[float, float], float]
+EdgeProfile = tuple[np.ndarray, np.ndarray, np.ndarray]
 
 
 @dataclass
@@ -43,19 +48,83 @@ class _UiMessage:
     payload: object = None
 
 
-class InteractiveReviewWindow:
-    """Own one Tkinter window and reuse its embedded Matplotlib canvas.
+def _indices_in_rectangle(
+    spots: PointList,
+    start: tuple[float, float],
+    end: tuple[float, float],
+) -> set[int]:
+    """Return point indices located inside a rectangular data-coordinate region."""
+    if not spots:
+        return set()
+    points = np.asarray(spots, dtype=float)[:, :2]
+    x_min, x_max = sorted((start[0], end[0]))
+    y_min, y_max = sorted((start[1], end[1]))
+    mask = (
+        (points[:, 0] >= x_min)
+        & (points[:, 0] <= x_max)
+        & (points[:, 1] >= y_min)
+        & (points[:, 1] <= y_max)
+    )
+    return set(np.flatnonzero(mask).tolist())
 
-    The Tkinter main loop runs on the caller thread. Detection runs on a worker
-    thread and communicates with the UI through a thread-safe message queue.
-    """
+
+def _indices_in_polygon(
+    spots: PointList,
+    vertices: Sequence[tuple[float, float]],
+) -> set[int]:
+    """Return point indices located inside a free-form polygon."""
+    if len(spots) == 0 or len(vertices) < 3:
+        return set()
+    points = np.asarray(spots, dtype=float)[:, :2]
+    mask = Path(vertices).contains_points(points, radius=1e-9)
+    return set(np.flatnonzero(mask).tolist())
+
+
+def _extract_edge_profiles(
+    image: np.ndarray,
+    spots: PointList,
+    n: int,
+    window_size: int = 15,
+) -> list[EdgeProfile]:
+    """Extract brightness and first-derivative profiles around every edge point."""
+    height, width = image.shape[:2]
+    profiles: list[EdgeProfile] = []
+
+    for spot in spots:
+        x = int(np.clip(round(float(spot[0])), 0, width - 1))
+        y = int(np.clip(round(float(spot[1])), 0, height - 1))
+
+        if len(spot) > 3:
+            is_x_line = int(spot[3]) == 0
+        else:
+            is_x_line = any(y == height * index // n for index in range(1, n))
+
+        if is_x_line:
+            line_data = image[y, :].astype(float)
+            center_index = x
+        else:
+            line_data = image[:, x].astype(float)
+            center_index = y
+
+        start = max(0, center_index - window_size)
+        end = min(len(line_data), center_index + window_size + 1)
+        values = line_data[start:end]
+        gradients = np.append(np.diff(line_data), 0)[start:end]
+        coordinates = np.arange(start, end) - center_index
+        profiles.append((coordinates, values, gradients))
+
+    return profiles
+
+
+class InteractiveReviewWindow:
+    """Own one Tkinter window and reuse its embedded Matplotlib canvases."""
 
     def __init__(self) -> None:
-        """Create the window and its single, reusable plot canvas."""
+        """Create the window, image toolbar, graph panel, and review controls."""
         self.root = tk.Tk()
         self.root.title("Solar Disk Detection - Interactive Review")
-        self.root.geometry("1100x850")
-        self.root.minsize(760, 560)
+        self.root.geometry("1360x900")
+        self.root.minsize(900, 640)
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
         try:
@@ -69,6 +138,13 @@ class InteractiveReviewWindow:
         self._last_image: np.ndarray | None = None
         self._excluded_indices: set[int] = set()
         self._scatter: PathCollection | None = None
+        self._image_artist = None
+        self._circle_artist: Circle | None = None
+        self._point_annotations = []
+        self._rectangle_selector: RectangleSelector | None = None
+        self._lasso_selector: LassoSelector | None = None
+        self._selection_mode = tk.StringVar(value="point")
+        self._show_profiles = tk.BooleanVar(value=False)
         self._finished = False
         self._result: DetectionResult | None = None
         self._error: Exception | None = None
@@ -76,6 +152,8 @@ class InteractiveReviewWindow:
 
         outer = ttk.Frame(self.root, padding=10)
         outer.pack(fill=tk.BOTH, expand=True)
+        outer.columnconfigure(0, weight=1)
+        outer.rowconfigure(4, weight=1)
 
         self._status = tk.StringVar(value="処理を準備しています...")
         ttk.Label(
@@ -83,31 +161,112 @@ class InteractiveReviewWindow:
             textvariable=self._status,
             font=("Yu Gothic UI", 12, "bold"),
             anchor=tk.W,
-        ).pack(fill=tk.X, pady=(0, 5))
+        ).grid(row=0, column=0, sticky=tk.EW, pady=(0, 5))
 
         self._detail = tk.StringVar(value="画像を読み込んでいます。")
         ttk.Label(
             outer,
             textvariable=self._detail,
             anchor=tk.W,
-            wraplength=1000,
-        ).pack(fill=tk.X, pady=(0, 8))
+            wraplength=1250,
+        ).grid(row=1, column=0, sticky=tk.EW, pady=(0, 8))
 
         self._progress = ttk.Progressbar(outer, mode="indeterminate", length=260)
-        self._progress.pack(fill=tk.X, pady=(0, 8))
+        self._progress.grid(row=2, column=0, sticky=tk.EW, pady=(0, 8))
         self._progress.start(12)
 
-        plot_frame = ttk.Frame(outer)
-        plot_frame.pack(fill=tk.BOTH, expand=True)
+        options = ttk.Frame(outer)
+        options.grid(row=3, column=0, sticky=tk.EW, pady=(0, 6))
 
-        self.figure = Figure(figsize=(9, 7), dpi=100)
+        self._profile_toggle = ttk.Checkbutton(
+            options,
+            text="縁近傍の輝度グラフを表示",
+            variable=self._show_profiles,
+            command=self._toggle_profiles,
+        )
+        self._profile_toggle.pack(side=tk.LEFT, padx=(0, 14))
+
+        ttk.Label(options, text="範囲選択:").pack(side=tk.LEFT, padx=(0, 5))
+        for label, value in (
+            ("点をクリック", "point"),
+            ("矩形範囲", "rectangle"),
+            ("自由範囲", "lasso"),
+        ):
+            ttk.Radiobutton(
+                options,
+                text=label,
+                value=value,
+                variable=self._selection_mode,
+                command=self._update_selection_mode,
+            ).pack(side=tk.LEFT, padx=3)
+
+        self._plot_frame = ttk.Frame(outer)
+        self._plot_frame.grid(row=4, column=0, sticky=tk.NSEW)
+        self._plot_frame.columnconfigure(0, weight=3)
+        self._plot_frame.columnconfigure(1, weight=2)
+        self._plot_frame.rowconfigure(0, weight=1)
+
+        self._image_frame = ttk.Frame(self._plot_frame)
+        self._image_frame.grid(row=0, column=0, sticky=tk.NSEW)
+        self._image_frame.rowconfigure(0, weight=1)
+        self._image_frame.columnconfigure(0, weight=1)
+
+        self.figure = Figure(figsize=(8, 7), dpi=100)
         self.axes = self.figure.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.figure, master=plot_frame)
-        self.canvas_widget = self.canvas.get_tk_widget()
-        self.canvas_widget.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.axes.set_axis_off()
+        self.canvas = FigureCanvasTkAgg(self.figure, master=self._image_frame)
+        self.canvas.get_tk_widget().grid(row=0, column=0, sticky=tk.NSEW)
+
+        toolbar_frame = ttk.Frame(self._image_frame)
+        toolbar_frame.grid(row=1, column=0, sticky=tk.EW)
+        self.toolbar = NavigationToolbar2Tk(
+            self.canvas,
+            toolbar_frame,
+            pack_toolbar=False,
+        )
+        self.toolbar.update()
+        self.toolbar.pack(side=tk.BOTTOM, fill=tk.X)
+
+        self._profile_frame = ttk.LabelFrame(
+            self._plot_frame,
+            text="縁近傍の輝度プロファイル",
+            padding=4,
+        )
+        self._profile_frame.rowconfigure(0, weight=1)
+        self._profile_frame.columnconfigure(0, weight=1)
+        self._profile_scroll = tk.Canvas(
+            self._profile_frame,
+            highlightthickness=0,
+            width=500,
+        )
+        profile_scrollbar = ttk.Scrollbar(
+            self._profile_frame,
+            orient=tk.VERTICAL,
+            command=self._profile_scroll.yview,
+        )
+        self._profile_scroll.configure(yscrollcommand=profile_scrollbar.set)
+        self._profile_scroll.grid(row=0, column=0, sticky=tk.NSEW)
+        profile_scrollbar.grid(row=0, column=1, sticky=tk.NS)
+
+        self._profile_inner = ttk.Frame(self._profile_scroll)
+        self._profile_window = self._profile_scroll.create_window(
+            (0, 0),
+            window=self._profile_inner,
+            anchor=tk.NW,
+        )
+        self._profile_inner.bind("<Configure>", self._on_profile_inner_configure)
+        self._profile_scroll.bind("<Configure>", self._on_profile_scroll_configure)
+
+        self.profile_figure = Figure(figsize=(5.1, 3), dpi=90)
+        self.profile_canvas = FigureCanvasTkAgg(
+            self.profile_figure,
+            master=self._profile_inner,
+        )
+        self.profile_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+        self._profile_frame.grid_remove()
 
         footer = ttk.Frame(outer)
-        footer.pack(fill=tk.X, pady=(8, 0))
+        footer.grid(row=5, column=0, sticky=tk.EW, pady=(8, 0))
 
         self._review_count = tk.StringVar(value="")
         ttk.Label(footer, textvariable=self._review_count).pack(side=tk.LEFT)
@@ -208,16 +367,45 @@ class InteractiveReviewWindow:
         if self.root.winfo_exists():
             self.root.after(40, self._process_messages)
 
+    def _on_profile_inner_configure(self, _event: tk.Event[tk.Misc]) -> None:
+        """Update the scrollable brightness-graph region."""
+        self._profile_scroll.configure(
+            scrollregion=self._profile_scroll.bbox("all")
+        )
+
+    def _on_profile_scroll_configure(self, event: tk.Event[tk.Misc]) -> None:
+        """Keep the embedded graph canvas as wide as its viewport."""
+        self._profile_scroll.itemconfigure(
+            self._profile_window,
+            width=event.width,
+        )
+
+    def _disconnect_selectors(self) -> None:
+        """Disable range selectors before changing the reviewed point set."""
+        for selector in (self._rectangle_selector, self._lasso_selector):
+            if selector is not None:
+                selector.set_active(False)
+                selector.disconnect_events()
+        self._rectangle_selector = None
+        self._lasso_selector = None
+
     def _show_processing_canvas(self) -> None:
-        """Clear the plot while retaining the existing figure and canvas."""
+        """Clear the image area while preserving its Figure and toolbar."""
+        self._disconnect_selectors()
         self.axes.clear()
         self.axes.set_axis_off()
+        self._image_artist = None
+        self._circle_artist = None
+        self._scatter = None
+        self._point_annotations.clear()
         self.canvas.draw_idle()
 
     def _show_processing(self, message: str) -> None:
-        """Update the progress message without creating another window."""
+        """Update the processing state without creating another window."""
         self._active_request = None
+        self._disconnect_selectors()
         self._review_controls.pack_forget()
+        self._profile_frame.grid_remove()
         self._progress.start(12)
         self._status.set("処理中")
         self._detail.set(message)
@@ -225,38 +413,51 @@ class InteractiveReviewWindow:
         self._show_processing_canvas()
 
     def _show_review(self, request: _ReviewRequest) -> None:
-        """Display a review stage in the persistent plot canvas."""
+        """Display a review stage in the persistent plot canvases."""
         self._progress.stop()
         self._active_request = request
         self._last_image = request.image
         self._excluded_indices.clear()
         self._status.set(request.title)
         self._detail.set(
-            "画像上の点をクリックして除外・復帰できます。選択後に「選択を適用」を押してください。"
+            "点をクリックして個別に切り替えるか、矩形／自由範囲で囲んだ点を除外できます。"
         )
         self._review_controls.pack(side=tk.RIGHT)
         self._close_button.pack_forget()
         self._draw_review_points()
+        self._update_selection_mode()
 
     def _draw_review_points(self) -> None:
-        """Redraw only the axes content; the Figure and Tk window are reused."""
+        """Update the image, circle, and point artists without resetting the toolbar."""
         request = self._active_request
         if request is None:
             return
 
-        points = np.asarray(request.spots, dtype=float)
-        self.axes.clear()
-        self.axes.imshow(request.image, cmap="magma")
-        self.axes.add_patch(
-            Circle(
+        if self._image_artist is None:
+            self.axes.clear()
+            self._image_artist = self.axes.imshow(request.image, cmap="magma")
+            self._circle_artist = Circle(
                 (request.circle[0], request.circle[1]),
                 request.circle[2],
                 fill=False,
                 color="orange",
                 linewidth=2,
             )
-        )
+            self.axes.add_patch(self._circle_artist)
+            self.axes.set_aspect("equal", adjustable="box")
+        else:
+            self._image_artist.set_data(request.image)
+            if self._circle_artist is not None:
+                self._circle_artist.center = (request.circle[0], request.circle[1])
+                self._circle_artist.set_radius(request.circle[2])
 
+        if self._scatter is not None:
+            self._scatter.remove()
+        for annotation in self._point_annotations:
+            annotation.remove()
+        self._point_annotations.clear()
+
+        points = np.asarray(request.spots, dtype=float)
         colors = [
             "tab:orange" if index in self._excluded_indices else "tab:green"
             for index in range(len(request.spots))
@@ -270,34 +471,165 @@ class InteractiveReviewWindow:
             linewidths=1.2,
             picker=True,
         )
+
         for index, point in enumerate(request.spots):
-            self.axes.annotate(
-                f"#{index + 1}",
-                (float(point[0]), float(point[1])),
-                color="yellow",
-                fontsize=9,
-                xytext=(4, 4),
-                textcoords="offset points",
+            self._point_annotations.append(
+                self.axes.annotate(
+                    f"#{index + 1}",
+                    (float(point[0]), float(point[1])),
+                    color="yellow",
+                    fontsize=9,
+                    xytext=(4, 4),
+                    textcoords="offset points",
+                )
             )
 
-        self.axes.axis("equal")
-        self.axes.set_axis_off()
         included = len(request.spots) - len(self._excluded_indices)
         self._review_count.set(
             f"採用点: {included} / {len(request.spots)}    "
             f"除外点: {len(self._excluded_indices)}"
         )
-        self.figure.tight_layout()
         self.canvas.draw_idle()
+        if self._show_profiles.get():
+            self._draw_brightness_profiles()
+
+    def _toggle_profiles(self) -> None:
+        """Show or hide the edge-neighborhood brightness graphs."""
+        request = self._active_request
+        if not self._show_profiles.get() or request is None:
+            self._profile_frame.grid_remove()
+            return
+        self._profile_frame.grid(row=0, column=1, sticky=tk.NSEW, padx=(6, 0))
+        self._draw_brightness_profiles()
+
+    def _draw_brightness_profiles(self) -> None:
+        """Render the original brightness/gradient mini-graphs in a scrollable pane."""
+        request = self._active_request
+        if request is None:
+            return
+
+        profiles = _extract_edge_profiles(
+            request.image,
+            request.spots,
+            n=10,
+            window_size=15,
+        )
+        columns = 2
+        rows = max(1, (len(profiles) + columns - 1) // columns)
+        self.profile_figure.clear()
+        self.profile_figure.set_size_inches(5.1, max(2.8, rows * 1.6), forward=True)
+        grid = GridSpec(rows, columns, figure=self.profile_figure, hspace=0.65, wspace=0.45)
+
+        for index, (coordinates, brightness, gradient) in enumerate(profiles):
+            axis = self.profile_figure.add_subplot(
+                grid[index // columns, index % columns]
+            )
+            axis.set_title(f"#{index + 1}", fontsize=9, fontweight="bold")
+            axis.plot(
+                coordinates,
+                brightness,
+                color="tab:orange",
+                linewidth=1.3,
+            )
+            axis.tick_params(axis="y", labelcolor="tab:orange", labelsize=7)
+            axis.tick_params(axis="x", labelsize=7)
+            axis.grid(alpha=0.3)
+
+            gradient_axis = axis.twinx()
+            gradient_axis.plot(
+                coordinates,
+                gradient,
+                color="tab:cyan",
+                linewidth=1.1,
+                linestyle="--",
+            )
+            gradient_axis.tick_params(
+                axis="y",
+                labelcolor="tab:cyan",
+                labelsize=7,
+            )
+            axis.axvline(0, color="red", linewidth=1, alpha=0.5)
+
+        self.profile_canvas.draw_idle()
+        self._profile_scroll.configure(
+            scrollregion=self._profile_scroll.bbox("all")
+        )
+
+    def _update_selection_mode(self) -> None:
+        """Switch between point, rectangle, and free-form area selection."""
+        self._disconnect_selectors()
+        request = self._active_request
+        if request is None or self._selection_mode.get() == "point":
+            return
+
+        if self.toolbar.mode:
+            self._detail.set(
+                "範囲選択の前に、ツールバーのパン／ズームを解除してください。"
+            )
+            return
+
+        if self._selection_mode.get() == "rectangle":
+            self._rectangle_selector = RectangleSelector(
+                self.axes,
+                self._on_rectangle_select,
+                useblit=True,
+                button=[1],
+                minspanx=1,
+                minspany=1,
+                spancoords="data",
+                interactive=False,
+                props={"facecolor": "tab:blue", "edgecolor": "tab:blue", "alpha": 0.2},
+            )
+            self._detail.set("画像上をドラッグして矩形範囲を指定します。範囲内の点を除外します。")
+        elif self._selection_mode.get() == "lasso":
+            self._lasso_selector = LassoSelector(
+                self.axes,
+                self._on_lasso_select,
+                useblit=True,
+                button=1,
+                props={"color": "tab:blue", "linewidth": 1.5},
+            )
+            self._detail.set("画像上をドラッグして自由範囲を描きます。範囲内の点を除外します。")
+
+    def _on_rectangle_select(self, start: MouseEvent, end: MouseEvent) -> None:
+        """Exclude all points inside a rectangular selection."""
+        if start.xdata is None or start.ydata is None:
+            return
+        if end.xdata is None or end.ydata is None:
+            return
+        indices = _indices_in_rectangle(
+            self._active_request.spots if self._active_request else [],
+            (float(start.xdata), float(start.ydata)),
+            (float(end.xdata), float(end.ydata)),
+        )
+        self._exclude_selected_indices(indices)
+
+    def _on_lasso_select(self, vertices: list[tuple[float, float]]) -> None:
+        """Exclude all points inside a free-form selection."""
+        indices = _indices_in_polygon(
+            self._active_request.spots if self._active_request else [],
+            vertices,
+        )
+        self._exclude_selected_indices(indices)
+
+    def _exclude_selected_indices(self, indices: set[int]) -> None:
+        """Add selected points to the exclusion set and refresh the preview."""
+        if not indices:
+            self._detail.set("範囲内に検出点がありませんでした。")
+            return
+        self._excluded_indices.update(indices)
+        self._draw_review_points()
+        self._detail.set(f"範囲選択で {len(indices)} 点を除外しました。")
 
     def _on_pick(self, event: PickEvent) -> None:
-        """Toggle a point when its marker is clicked."""
+        """Toggle a single point when point-selection mode is active."""
         indices = cast(
             np.ndarray,
             getattr(event, "ind", np.array([], dtype=int)),
         )
         if (
             self._active_request is None
+            or self._selection_mode.get() != "point"
             or event.artist is not self._scatter
             or indices.size == 0
         ):
@@ -346,7 +678,9 @@ class InteractiveReviewWindow:
     def _complete_review(self, request: _ReviewRequest) -> None:
         """Return from the review stage and resume detection."""
         self._active_request = None
+        self._disconnect_selectors()
         self._review_controls.pack_forget()
+        self._profile_frame.grid_remove()
         self._status.set("処理中")
         self._detail.set("選択内容を反映して検出を続けています。")
         self._progress.start(12)
@@ -359,6 +693,7 @@ class InteractiveReviewWindow:
         self._result = result
         self._progress.stop()
         self._review_controls.pack_forget()
+        self._profile_frame.grid_remove()
         self._status.set("検出が完了しました")
         (cx, cy), radius = result
         self._detail.set(
@@ -376,9 +711,9 @@ class InteractiveReviewWindow:
                 linewidth=2,
             )
         )
-        self.axes.set_title("Final fitted circle")
-        self.axes.axis("equal")
+        self.axes.set_aspect("equal", adjustable="box")
         self.canvas.draw_idle()
+        self.toolbar.update()
         self._close_button.pack(side=tk.RIGHT)
 
     def _show_error(self, error: Exception) -> None:
@@ -387,6 +722,7 @@ class InteractiveReviewWindow:
         self._error = error
         self._progress.stop()
         self._review_controls.pack_forget()
+        self._profile_frame.grid_remove()
         self._status.set("処理中にエラーが発生しました")
         self._detail.set(str(error))
         self._show_processing_canvas()
