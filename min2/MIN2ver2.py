@@ -25,7 +25,7 @@ if __package__:
 else:  # 直接実行時
     from image_loader import load_image
 
-version = "MIN2 v2.4.3"  # limb_wigthの割合指定を修正
+version = "MIN2 v2.4.4"  # limb_wigthの割合指定を修正
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
