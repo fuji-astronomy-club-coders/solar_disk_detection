@@ -20,6 +20,7 @@ import cv2
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import gridspec
+from matplotlib.colors import is_color_like
 from matplotlib.patches import Circle
 
 if __package__:
@@ -27,7 +28,7 @@ if __package__:
 else:  # 直接実行時
     from image_loader import load_image
 
-version = "MIN2 v2.5.2"  # trial circle / iteration の手動レビューに対応
+version = "MIN2 v2.5.3"  # configurable plot point size and color
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -84,6 +85,8 @@ class MIN2Config:
     show: bool = False  # 結果を描画するか
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
+    plot_point_size: float | None = None  # Noneなら表示形式ごとの従来サイズ
+    plot_point_color: str | None = None  # Noneなら表示形式ごとの従来色
     interactive_review: bool = False  # trial circle / 各反復で手動レビューするか
     save_result: bool = False  # 画像と同じフォルダへMIN2結果JSONを保存するか
     dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
@@ -94,6 +97,21 @@ class MIN2Config:
             value = getattr(self, f.name)
             if f.name == "limb_wigth" and isinstance(value, str):
                 _parse_limb_width_ratio(value)
+                continue
+            if f.name == "plot_point_size":
+                if value is not None and (
+                    isinstance(value, bool)
+                    or not isinstance(value, (int, float))
+                    or not np.isfinite(value)
+                    or value <= 0
+                ):
+                    raise ValueError("設定 'plot_point_size' は null または正の有限数にしてください。")
+                continue
+            if f.name == "plot_point_color":
+                if value is not None and (
+                    not isinstance(value, str) or not is_color_like(value)
+                ):
+                    raise ValueError("設定 'plot_point_color' は null または有効なMatplotlib色にしてください。")
                 continue
             if f.type in (bool, "bool"):
                 ok = isinstance(value, bool)
@@ -501,6 +519,8 @@ def show_circle(
     is_last: bool = False,
     simple: bool = False,
     n: int | None = None,
+    point_size: float | None = None,
+    point_color: str | None = None,
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、近似円を描画し、各エッジ点付近の明るさと微分の2軸グラフを右側に並べて表示する。
 
@@ -514,6 +534,8 @@ def show_circle(
         is_last: Trueなら反復回数の代わりに "Last" と表示。
         simple: Trueならシンプルな表示(ポスター図用)のみを行う。
         n: 分割数。Noneならglobal変数divnumを使う。
+        point_size: エッジ点のマーカーサイズ(pt²)。Noneなら詳細50 / 簡易400を使う。
+        point_color: エッジ点の色。Noneなら従来色を使う。
     """
     if simple:
         show_circle_simple(
@@ -524,6 +546,8 @@ def show_circle(
             iteration_count=iteration_count,
             is_last=is_last,
             n=n,
+            markersize=400 if point_size is None else point_size,
+            point_color=point_color,
         )
         return
 
@@ -574,7 +598,13 @@ def show_circle(
 
     x = np.array([s[0] for s in spots], dtype=float)
     y = np.array([s[1] for s in spots], dtype=float)
-    ax_main.scatter(x, y, color="red", label="Edges", s=50)
+    ax_main.scatter(
+        x,
+        y,
+        color="red" if point_color is None else point_color,
+        label="Edges",
+        s=50 if point_size is None else point_size,
+    )
 
     # 座標ラベルと対応関係のための番号を表示
     for idx, (xi, yi) in enumerate(zip(x, y, strict=False)):
@@ -661,8 +691,9 @@ def show_circle_simple(
     img_path: pathlib.Path | str | None = None,
     iteration_count: int | str = 1,
     is_last: bool = False,
-    markersize: int = 400,
+    markersize: float = 400,
     n: int | None = None,
+    point_color: str | None = None,
 ) -> None:
     """画像上に分割線、サンプリングされた縁の点、近似円をシンプルに描画して表示する。
 
@@ -673,8 +704,9 @@ def show_circle_simple(
         img_path: 画像のファイルパス。
         iteration_count: 現在の反復回数。
         is_last: Trueなら "Last" と表示。
-        markersize: 縁の点のマーカーサイズ。
+        markersize: 縁の点のマーカーサイズ(pt²)。
         n: 分割数。Noneならglobal変数divnumを使う。
+        point_color: 縁の点の色。Noneなら従来の赤色を使う。
     """
     image = _resolve_image(img_inst, img_path)
     n = _resolve_divnum(n)
@@ -691,7 +723,7 @@ def show_circle_simple(
         ax.scatter(
             x,
             y,
-            color="red",
+            color="red" if point_color is None else point_color,
             label="Edges",
             s=markersize,
             linewidths=2,
@@ -724,6 +756,8 @@ class _ReviewWindow(Protocol):
         spots: list[list[float]],
         circle: tuple[float, float, float],
         title: str,
+        point_size: float | None = None,
+        point_color: str | None = None,
     ) -> list[list[float]]:
         """Show the current points and wait for the user's selection."""
         ...
@@ -755,11 +789,15 @@ def _review_points_interactively(
     cir_stat: tuple[float, float, float],
     title: str,
     review_ui: _ReviewWindow,
+    point_size: float | None = None,
+    point_color: str | None = None,
 ) -> list[list[float]]:
     """Show edge points in the persistent UI and wait for manual review."""
     if not spots:
         return spots
-    return review_ui.review(image, spots, cir_stat, title)
+    return review_ui.review(
+        image, spots, cir_stat, title, point_size=point_size, point_color=point_color
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -875,7 +913,13 @@ def _MIN2_ignore_sunspots_core(
     if interactive_review:
         assert review_ui is not None
         reviewed_spots = _review_points_interactively(
-            image, spots, (cx, cy, r), "試行円：検出点の確認", review_ui
+            image,
+            spots,
+            (cx, cy, r),
+            "試行円：検出点の確認",
+            review_ui,
+            point_size=cfg.plot_point_size,
+            point_color=cfg.plot_point_color,
         )
         manually_removed = _points_removed(spots, reviewed_spots)
         if len(reviewed_spots) < len(spots):
@@ -908,6 +952,8 @@ def _MIN2_ignore_sunspots_core(
                 fig_info={"circle": "first trial"},
                 simple=show_simple,
                 n=n,
+                point_size=cfg.plot_point_size,
+                point_color=cfg.plot_point_color,
             )
 
     initial_retained_points = [
@@ -928,6 +974,8 @@ def _MIN2_ignore_sunspots_core(
                 (cx, cy, r),
                 f"反復 {cycle}：残存点の確認",
                 review_ui,
+                point_size=cfg.plot_point_size,
+                point_color=cfg.plot_point_color,
             )
             manual_removed_this_cycle = _points_removed(safe_points, reviewed_points)
             if len(reviewed_points) < len(safe_points):
@@ -1022,6 +1070,8 @@ def _MIN2_ignore_sunspots_core(
                     fig_info={"circle": "only outside points "},
                     simple=show_simple,
                     n=n,
+                    point_size=cfg.plot_point_size,
+                    point_color=cfg.plot_point_color,
                 )
             print(
                 f"    [INFO]:外側の点の数:{len(outside_spots)},全体の点の数:{len(spots)}"
@@ -1111,6 +1161,8 @@ def _MIN2_ignore_sunspots_core(
             is_last=True,
             simple=show_simple,
             n=n,
+            point_size=cfg.plot_point_size,
+            point_color=cfg.plot_point_color,
         )
     if review_ui is not None:
         review_ui.update_processing("最終結果を表示しています。")
@@ -1127,6 +1179,8 @@ def _MIN2_ignore_sunspots_core(
                     "show": bool(show),
                     "debug": bool(debug),
                     "show_simple": bool(show_simple),
+                    "plot_point_size": cfg.plot_point_size,
+                    "plot_point_color": cfg.plot_point_color,
                     "interactive_review": bool(interactive_review),
                     "image_dtype": str(image.dtype),
                 },
