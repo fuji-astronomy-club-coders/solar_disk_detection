@@ -24,15 +24,13 @@ class MIN2PlotPointStyleTests(unittest.TestCase):
 
     def test_rejects_invalid_point_sizes(self) -> None:
         for value in (0, -1, True, float("inf"), float("nan"), "72"):
-            with self.subTest(value=value):
-                with self.assertRaises(ValueError):
-                    MIN2Config(plot_point_size=value)  # type: ignore[arg-type]
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                MIN2Config(plot_point_size=value)  # type: ignore[arg-type]
 
     def test_rejects_invalid_point_colors(self) -> None:
         for value in ("not-a-color", 123):
-            with self.subTest(value=value):
-                with self.assertRaises(ValueError):
-                    MIN2Config(plot_point_color=value)  # type: ignore[arg-type]
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                MIN2Config(plot_point_color=value)  # type: ignore[arg-type]
 
     def test_detailed_plot_uses_configured_size_and_color(self) -> None:
         image = np.arange(100, dtype=np.uint8).reshape(10, 10)
