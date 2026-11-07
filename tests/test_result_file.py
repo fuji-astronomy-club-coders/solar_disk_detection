@@ -91,7 +91,7 @@ class Min2ResultFileTests(unittest.TestCase):
                 "center_y_px": 11.75,
                 "radius_px": 9.5,
             })
-            self.assertEqual(payload["min2_version"], "MIN2 v2.5.2")
+            self.assertEqual(payload["min2_version"], "MIN2 v2.5.3")
             self.assertEqual(payload["configuration"]["requested"]["save_result"], True)
             self.assertIn("effective", payload["configuration"])
             self.assertEqual(
