@@ -1,5 +1,6 @@
 """Tests for optional per-image MIN2 result sidecar generation."""
 
+import hashlib
 import json
 import tempfile
 import unittest
@@ -37,17 +38,24 @@ class Min2ResultFileTests(unittest.TestCase):
             payload = json.loads(sidecar.read_text(encoding="utf-8"))
             self.assertEqual(result, expected)
             self.assertEqual(payload["format"], "solar_disk_detection.min2_result")
-            self.assertEqual(payload["format_version"], 1)
+            self.assertEqual(payload["format_version"], 2)
             self.assertEqual(payload["source_image"], {
                 "name": "sun_001.tiff",
                 "shape": [24, 40],
+                "dtype": "uint16",
+                "size_bytes": 5,
+                "sha256": hashlib.sha256(b"image").hexdigest(),
             })
             self.assertEqual(payload["solar_geometry"], {
                 "center_x_px": 19.25,
                 "center_y_px": 11.75,
                 "radius_px": 9.5,
             })
-            self.assertEqual(payload["min2_version"], "MIN2 v2.5.1")
+            self.assertEqual(payload["min2_version"], "MIN2 v2.5.2")
+            self.assertEqual(payload["configuration"]["requested"]["save_result"], True)
+            self.assertIn("effective", payload["configuration"])
+            self.assertEqual(payload["detection_trace"]["excluded_points"], [])
+            self.assertEqual(payload["detection_trace"]["sampled_edge_points"], [])
             core.assert_called_once()
 
     def test_saving_is_disabled_by_default(self) -> None:
