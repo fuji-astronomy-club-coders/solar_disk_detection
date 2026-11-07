@@ -13,5 +13,6 @@ show: false              # 結果を描画する(CLIの既定は true)
 debug: false             # ログ・途中経過を出力する(CLIの既定は true)
 show_simple: false       # 描画をシンプル表示にする
 interactive_review: true # Tkinterウィンドウ1つで処理中表示・各反復プレビュー・最終結果を更新
+save_result: false      # trueにすると画像と同じフォルダへ <画像名>_min2.json を保存
                           # 点をクリックして除外・復帰。画面のボタンで適用／取消
 dir_mode_limb_wigth: 60  # CLIの --dir(フォルダ一括)時に使う limb_wigth
