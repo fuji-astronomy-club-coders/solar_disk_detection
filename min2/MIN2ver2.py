@@ -878,15 +878,6 @@ def _MIN2_ignore_sunspots_core(
             image, spots, (cx, cy, r), "試行円：検出点の確認", review_ui
         )
         manually_removed = _points_removed(spots, reviewed_spots)
-        for point in manually_removed:
-            excluded_point_records.append(
-                {
-                    "iteration": 0,
-                    "stage": "initial_review",
-                    "reason": "manual_review",
-                    "point": point,
-                }
-            )
         if len(reviewed_spots) < len(spots):
             try:
                 reviewed_circle = fit_circle(reviewed_spots, show and not interactive_review, image, n)
@@ -895,6 +886,15 @@ def _MIN2_ignore_sunspots_core(
             else:
                 spots = reviewed_spots
                 cx, cy, r = reviewed_circle
+                for point in manually_removed:
+                    excluded_point_records.append(
+                        {
+                            "iteration": 0,
+                            "stage": "initial_review",
+                            "reason": "manual_review",
+                            "point": point,
+                        }
+                    )
 
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
@@ -930,23 +930,24 @@ def _MIN2_ignore_sunspots_core(
                 review_ui,
             )
             manual_removed_this_cycle = _points_removed(safe_points, reviewed_points)
-            for point in manual_removed_this_cycle:
-                excluded_point_records.append(
-                    {
-                        "iteration": cycle,
-                        "stage": "iteration_review",
-                        "reason": "manual_review",
-                        "point": point,
-                    }
-                )
             if len(reviewed_points) < len(safe_points):
                 try:
                     reviewed_circle = fit_circle(reviewed_points, show, image, n)
                 except ValueError as e:
                     print(f"[WARN]:手動除外後に円を作れないため、変更を破棄します。({e})")
+                    manual_removed_this_cycle = []
                 else:
                     safe_points = reviewed_points
                     cx, cy, r = reviewed_circle
+                    for point in manual_removed_this_cycle:
+                        excluded_point_records.append(
+                            {
+                                "iteration": cycle,
+                                "stage": "iteration_review",
+                                "reason": "manual_review",
+                                "point": point,
+                            }
+                        )
 
         if limb_width_ratio is not None:
             current_limb_width = r * limb_width_ratio
