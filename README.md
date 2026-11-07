@@ -40,7 +40,7 @@ solar_disk_detection-MIN2_v2.5.3/
 
 ```bash
 # リポジトリのクローンまたは展開後、ディレクトに入 we
-cd solar_disk_detection-MIN2_v2.4.0
+cd solar_disk_detection-MIN2_v2.5.3
 
 # 依存パッケージのインストール
 pip install -e .
@@ -233,7 +233,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 ## モジュール定数・グローバル変数
 
-* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.5.0"`）。
+* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.5.3"`）。
 * **`DIR_X_LINE` (`0`)**: 横方向走査線で検出したエッジ点を示すフラグ。
 * **`DIR_Y_LINE` (`1`)**: 縦方向走査線で検出したエッジ点を示すフラグ。
 
@@ -243,7 +243,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 バージョン 2.3.5 以前の旧コードでは、グローバル変数 (`img`, `divnum`, `height`, `width`) や `"GLOBAL"` パラメータに依存した実装が行われていました。
 
-本バージョン（v2.5.0）では以下の改善および互換性処理が行われています。
+本バージョン（v2.5.3）では以下の改善および互換性処理が行われています。
 
 1. **グローバル変数依存の脱却**:
 * 内部処理はすべて関数引数経由での受け渡しに統一され、マルチスレッド環境や複数画像の連続処理時の安全性が向上しました。
