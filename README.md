@@ -12,7 +12,7 @@
 ## プロジェクト構造
 
 ```text
-solar_disk_detection-MIN2_v2.5.2/
+solar_disk_detection-MIN2_v2.5.3/
 ├── min2/
 │   ├── __init__.py        # バージョン情報の定義
 │   └── MIN2ver2.py        # 円検出・黒点除外処理コアロジック
@@ -154,7 +154,7 @@ CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG
 python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 ```
 
-キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `interactive_review`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。
+キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `plot_point_size`, `plot_point_color`, `interactive_review`, `save_result`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。`plot_point_size` は Matplotlib の scatter サイズ(pt²)で、`null` なら詳細表示50・簡易表示400・手動レビュー85を維持し、正の有限数を指定すると全表示に共通適用します。`plot_point_color` は `null` なら従来色を維持し、Matplotlibの色名またはHEX色を指定すると反映します。手動レビュー画面では除外点の橙色表示を維持します。
 
 ---
 
