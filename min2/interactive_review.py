@@ -38,6 +38,8 @@ class _ReviewRequest:
     spots: PointList
     circle: CircleStatus
     title: str
+    point_size: float = 85
+    point_color: str | None = None
     result: PointList | None = None
     completed: threading.Event = field(default_factory=threading.Event)
 
@@ -327,6 +329,8 @@ class InteractiveReviewWindow:
         spots: PointList,
         circle: CircleStatus,
         title: str,
+        point_size: float | None = None,
+        point_color: str | None = None,
     ) -> PointList:
         """Display points in the existing window and wait for a user decision."""
         request = _ReviewRequest(
@@ -334,6 +338,8 @@ class InteractiveReviewWindow:
             spots=[list(point) for point in spots],
             circle=circle,
             title=title,
+            point_size=85 if point_size is None else point_size,
+            point_color=point_color,
         )
         self._messages.put(_UiMessage("review", request))
         request.completed.wait()
@@ -461,14 +467,16 @@ class InteractiveReviewWindow:
 
         points = np.asarray(request.spots, dtype=float)
         colors = [
-            "tab:orange" if index in self._excluded_indices else "tab:green"
+            "tab:orange"
+            if index in self._excluded_indices
+            else (request.point_color or "tab:green")
             for index in range(len(request.spots))
         ]
         self._scatter = self.axes.scatter(
             points[:, 0],
             points[:, 1],
             c=colors,
-            s=85,
+            s=request.point_size,
             edgecolors="white",
             linewidths=1.2,
             picker=True,
