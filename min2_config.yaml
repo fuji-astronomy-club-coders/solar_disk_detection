@@ -12,6 +12,8 @@ iter_cycles: 2           # 黒点排除の最大反復回数(0なら排除なし
 show: false              # 結果を描画する(CLIの既定は true)
 debug: false             # ログ・途中経過を出力する(CLIの既定は true)
 show_simple: false       # 描画をシンプル表示にする
+plot_point_size: null     # nullなら詳細50 / 簡易400 / レビュー85を維持。数値指定で全表示に共通適用(pt²)
+plot_point_color: null    # nullなら従来色を維持。指定時はMatplotlib色名またはHEX色を使用(レビューの除外点は橙色)
 interactive_review: true # Tkinterウィンドウ1つで処理中表示・各反復プレビュー・最終結果を更新
                           # 点をクリックして除外・復帰。画面のボタンで適用／取消
 save_result: false      # trueにすると設定・除外点・反復履歴を含む <画像名>_min2.json を保存
