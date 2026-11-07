@@ -5,6 +5,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -23,7 +24,8 @@ class Min2ResultFileTests(unittest.TestCase):
             image_path = Path(directory) / "sun_001.tiff"
             image_path.write_bytes(b"image")
             expected = ((19.25, 11.75), 9.5)
-            def fake_core(**kwargs: object) -> tuple[tuple[float, float], float]:
+
+            def fake_core(**kwargs: Any) -> tuple[tuple[float, float], float]:
                 details = kwargs["result_details"]
                 assert isinstance(details, dict)
                 details.update(
