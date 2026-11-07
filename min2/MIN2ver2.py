@@ -7,10 +7,12 @@ main: MIN2_ignore_sunspots()
 limb_wigth*(2/3) の範囲にないものは黒点とみなします。
 """
 
+import hashlib
+import json
 import os
 import pathlib
 import warnings
-from dataclasses import dataclass, fields, replace
+from dataclasses import asdict, dataclass, fields, replace
 from pprint import pformat, pprint
 from typing import Any, Protocol
 
@@ -25,7 +27,7 @@ if __package__:
 else:  # 直接実行時
     from image_loader import load_image
 
-version = "MIN2 v2.5.0"  # trial circle / iteration の手動レビューに対応
+version = "MIN2 v2.5.2"  # trial circle / iteration の手動レビューに対応
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -83,6 +85,7 @@ class MIN2Config:
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
     interactive_review: bool = False  # trial circle / 各反復で手動レビューするか
+    save_result: bool = False  # 画像と同じフォルダへMIN2結果JSONを保存するか
     dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
 
     def __post_init__(self) -> None:
@@ -214,6 +217,69 @@ def _to_gray(image: np.ndarray) -> np.ndarray:
         if ch == 4:
             return cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
     raise ValueError(f"対応していない画像形状です: shape={image.shape}")
+
+
+def _save_min2_result_file(
+    img_inst: np.ndarray | str,
+    img_path: pathlib.Path | str,
+    result: tuple[tuple[float, float], float],
+    config: MIN2Config,
+    result_details: dict[str, Any],
+) -> pathlib.Path:
+    """Save the detected solar geometry beside its source image as a versioned JSON file."""
+    source_path = pathlib.Path(img_path)
+    if not source_path.is_file():
+        raise FileNotFoundError(f"結果を保存する元画像がありません: {source_path}")
+
+    source_image = load_image(source_path) if isinstance(img_inst, str) else img_inst
+    gray_image = _to_gray(source_image)
+    (center_x, center_y), radius = result
+    values = (float(center_x), float(center_y), float(radius))
+    if not all(np.isfinite(value) for value in values) or values[2] <= 0:
+        raise ValueError("保存する太陽円の座標・半径が不正です。")
+
+    file_hash = hashlib.sha256()
+    with source_path.open("rb") as image_file:
+        for chunk in iter(lambda: image_file.read(1024 * 1024), b""):
+            file_hash.update(chunk)
+
+    result_path = source_path.with_name(f"{source_path.stem}_min2.json")
+    payload = {
+        "format": "solar_disk_detection.min2_result",
+        "format_version": 2,
+        "source_image": {
+            "name": source_path.name,
+            "shape": [int(gray_image.shape[0]), int(gray_image.shape[1])],
+            "dtype": str(gray_image.dtype),
+            "size_bytes": source_path.stat().st_size,
+            "sha256": file_hash.hexdigest(),
+        },
+        "solar_geometry": {
+            "center_x_px": values[0],
+            "center_y_px": values[1],
+            "radius_px": values[2],
+        },
+        "configuration": {
+            "requested": asdict(config),
+            "effective": result_details.get("effective_configuration", {}),
+        },
+        "detection_trace": {
+            "sampled_edge_points": result_details.get("sampled_edge_points", []),
+            "initial_retained_points": result_details.get("initial_retained_points", []),
+            "final_retained_points": result_details.get("final_retained_points", []),
+            "excluded_points": result_details.get("excluded_points", []),
+            "iterations": result_details.get("iterations", []),
+        },
+        "min2_version": version,
+    }
+    temporary_path = result_path.with_suffix(result_path.suffix + ".tmp")
+    temporary_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
+        encoding="utf-8",
+    )
+    temporary_path.replace(result_path)
+    print(f"[INFO]:MIN2結果を保存しました: {result_path}")
+    return result_path
 
 
 def _resolve_image(
@@ -663,6 +729,26 @@ class _ReviewWindow(Protocol):
         ...
 
 
+def _points_removed(
+    original: list[list[float]],
+    retained: list[list[float]],
+) -> list[list[float]]:
+    """Return points removed from a list while accounting for duplicate coordinates."""
+    counts: dict[tuple[float, ...], int] = {}
+    for point in retained:
+        key = tuple(float(value) for value in point)
+        counts[key] = counts.get(key, 0) + 1
+
+    removed: list[list[float]] = []
+    for point in original:
+        key = tuple(float(value) for value in point)
+        if counts.get(key, 0):
+            counts[key] -= 1
+        else:
+            removed.append([float(value) for value in point])
+    return removed
+
+
 def _review_points_interactively(
     image: np.ndarray,
     spots: list[list[float]],
@@ -692,6 +778,7 @@ def _MIN2_ignore_sunspots_core(
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
     interactive_review: bool | None = None,
     review_ui: _ReviewWindow | None = None,
+    result_details: dict[str, Any] | None = None,
 ) -> tuple[tuple[float, float], float]:
     """黒点（サンスポット）による影響を除外しながら、最小二乗法により太陽の最終的な近似円（中心と半径）を検出します。
 
@@ -771,10 +858,15 @@ def _MIN2_ignore_sunspots_core(
     divnum, img = n, image
     height, width = image.shape[:2]
 
+    configured_light_threshold = int(light_threshold)
     if image.dtype == np.uint16:
         light_threshold = light_threshold * 256
+    effective_light_threshold = int(light_threshold)
 
     spots = cut_and_sampling(image, light_threshold, n)
+    sampled_edge_points = [[float(value) for value in point] for point in spots]
+    excluded_point_records: list[dict[str, Any]] = []
+    iteration_records: list[dict[str, Any]] = []
     if debug:
         pprint(spots)
     if review_ui is not None:
@@ -785,6 +877,7 @@ def _MIN2_ignore_sunspots_core(
         reviewed_spots = _review_points_interactively(
             image, spots, (cx, cy, r), "試行円：検出点の確認", review_ui
         )
+        manually_removed = _points_removed(spots, reviewed_spots)
         if len(reviewed_spots) < len(spots):
             try:
                 reviewed_circle = fit_circle(reviewed_spots, show and not interactive_review, image, n)
@@ -793,6 +886,15 @@ def _MIN2_ignore_sunspots_core(
             else:
                 spots = reviewed_spots
                 cx, cy, r = reviewed_circle
+                for point in manually_removed:
+                    excluded_point_records.append(
+                        {
+                            "iteration": 0,
+                            "stage": "initial_review",
+                            "reason": "manual_review",
+                            "point": point,
+                        }
+                    )
 
     if debug:
         print(f"[INFO]:trial circle (cx,cy,r)={cx, cy, r}")
@@ -808,12 +910,16 @@ def _MIN2_ignore_sunspots_core(
                 n=n,
             )
 
+    initial_retained_points = [
+        [float(value) for value in point] for point in spots
+    ]
     all_sunspots = []
     safe_points = list(spots)
 
     for cycle in range(1, iter_cycles + 1):
         if review_ui is not None:
             review_ui.update_processing(f"反復 {cycle} を処理しています。")
+        manual_removed_this_cycle: list[list[float]] = []
         if interactive_review:
             assert review_ui is not None
             reviewed_points = _review_points_interactively(
@@ -823,14 +929,25 @@ def _MIN2_ignore_sunspots_core(
                 f"反復 {cycle}：残存点の確認",
                 review_ui,
             )
+            manual_removed_this_cycle = _points_removed(safe_points, reviewed_points)
             if len(reviewed_points) < len(safe_points):
                 try:
                     reviewed_circle = fit_circle(reviewed_points, show, image, n)
                 except ValueError as e:
                     print(f"[WARN]:手動除外後に円を作れないため、変更を破棄します。({e})")
+                    manual_removed_this_cycle = []
                 else:
                     safe_points = reviewed_points
                     cx, cy, r = reviewed_circle
+                    for point in manual_removed_this_cycle:
+                        excluded_point_records.append(
+                            {
+                                "iteration": cycle,
+                                "stage": "iteration_review",
+                                "reason": "manual_review",
+                                "point": point,
+                            }
+                        )
 
         if limb_width_ratio is not None:
             current_limb_width = r * limb_width_ratio
@@ -840,6 +957,20 @@ def _MIN2_ignore_sunspots_core(
         if debug:
             print(f"iter: {cycle}")
 
+        iteration_record: dict[str, Any] = {
+            "iteration": cycle,
+            "circle_before": [float(cx), float(cy), float(r)],
+            "limb_width_px": float(current_limb_width),
+            "manual_review_excluded_points": manual_removed_this_cycle,
+            "outside_point_count": 0,
+            "inside_point_count": 0,
+            "outside_circle": None,
+            "excluded_points": [],
+            "retry_points": [],
+            "retained_points_after": [],
+            "circle_after": None,
+            "termination_reason": None,
+        }
         outside_spots = []
         inside_spots = []
         for point in safe_points:
@@ -853,8 +984,16 @@ def _MIN2_ignore_sunspots_core(
         # inside_spotsのindexで黒点を管理するため、insideを先頭に並べる
         safe_points = inside_spots + outside_spots
 
+        iteration_record["outside_point_count"] = len(outside_spots)
+        iteration_record["inside_point_count"] = len(inside_spots)
         if len(outside_spots) < 3:
             print("[WARN]:外側の点が3点未満のため、黒点排除を打ち切ります。")
+            iteration_record["termination_reason"] = "fewer_than_three_outside_points"
+            iteration_record["retained_points_after"] = [
+                [float(value) for value in point] for point in safe_points
+            ]
+            iteration_record["circle_after"] = [float(cx), float(cy), float(r)]
+            iteration_records.append(iteration_record)
             break
         try:
             cxo, cyo, ro = fit_circle(
@@ -862,7 +1001,15 @@ def _MIN2_ignore_sunspots_core(
             )
         except ValueError as e:
             print(f"[WARN]:外側の点から円を作れないため、黒点排除を打ち切ります。({e})")
+            iteration_record["termination_reason"] = "outside_circle_fit_failed"
+            iteration_record["outside_circle_error"] = str(e)
+            iteration_record["retained_points_after"] = [
+                [float(value) for value in point] for point in safe_points
+            ]
+            iteration_record["circle_after"] = [float(cx), float(cy), float(r)]
+            iteration_records.append(iteration_record)
             break
+        iteration_record["outside_circle"] = [float(cxo), float(cyo), float(ro)]
         if debug:
             print(f"[INFO]:outside circle (cx,cy,r)={cxo, cyo, ro}")
             if show and not interactive_review:
@@ -908,20 +1055,52 @@ def _MIN2_ignore_sunspots_core(
                     print(
                         f"    黒点を検出しました({tag})。再検討します。\n    {point}\n    → {retry}"
                     )
+                exclusion_record = {
+                    "iteration": cycle,
+                    "stage": "automatic_sunspot_filter",
+                    "reason": "sunspot_edge_point",
+                    "inside_point_index": int(i),
+                    "point": [float(value) for value in point],
+                    "side": tag,
+                    "gap_px": float(gap),
+                    "threshold_px": float(current_limb_width * (2 / 3)),
+                    "retry_point": (
+                        [float(value) for value in retry]
+                        if retry is not None
+                        else None
+                    ),
+                }
+                excluded_point_records.append(exclusion_record)
+                iteration_record["excluded_points"].append(exclusion_record)
                 if retry is not None:
                     retry_points.append(retry)
 
+        iteration_record["retry_points"] = [
+            [float(value) for value in point] for point in retry_points
+        ]
         for i in sorted(sunspots, reverse=True):
             all_sunspots.append(safe_points.pop(i))
         safe_points.extend(retry_points)
+        iteration_record["retained_points_after"] = [
+            [float(value) for value in point] for point in safe_points
+        ]
 
         if not sunspots:
+            iteration_record["termination_reason"] = "no_sunspot_points_excluded"
+            iteration_record["circle_after"] = [float(cx), float(cy), float(r)]
+            iteration_records.append(iteration_record)
             break
         if len(safe_points) < 3:
             print("[WARN]:黒点除外後の点が3点未満のため、直前の円を採用します。")
+            iteration_record["termination_reason"] = "fewer_than_three_retained_points"
+            iteration_record["circle_after"] = [float(cx), float(cy), float(r)]
+            iteration_records.append(iteration_record)
             break
         # 黒点とみなされない点だけで円を作成
         cx, cy, r = fit_circle(np.array(safe_points, dtype=float), show and not interactive_review, image, n)
+        iteration_record["circle_after"] = [float(cx), float(cy), float(r)]
+        iteration_record["termination_reason"] = "circle_refitted"
+        iteration_records.append(iteration_record)
 
     if show and not interactive_review:
         show_circle(
@@ -935,6 +1114,31 @@ def _MIN2_ignore_sunspots_core(
         )
     if review_ui is not None:
         review_ui.update_processing("最終結果を表示しています。")
+
+    if result_details is not None:
+        result_details.update(
+            {
+                "effective_configuration": {
+                    "n": int(n),
+                    "light_threshold": configured_light_threshold,
+                    "effective_light_threshold": effective_light_threshold,
+                    "limb_wigth": limb_wigth,
+                    "iter_cycles": int(iter_cycles),
+                    "show": bool(show),
+                    "debug": bool(debug),
+                    "show_simple": bool(show_simple),
+                    "interactive_review": bool(interactive_review),
+                    "image_dtype": str(image.dtype),
+                },
+                "sampled_edge_points": sampled_edge_points,
+                "initial_retained_points": initial_retained_points,
+                "final_retained_points": [
+                    [float(value) for value in point] for point in safe_points
+                ],
+                "excluded_points": excluded_point_records,
+                "iterations": iteration_records,
+            }
+        )
     return (cx, cy), r
 
 
@@ -951,18 +1155,23 @@ def MIN2_ignore_sunspots(
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
     interactive_review: bool | None = None,
 ) -> tuple[tuple[float, float], float]:
-    """Detect a solar disk and optionally review all stages in one Tkinter window.
+    """Detect a solar disk and optionally save its result beside the source image.
 
-    When interactive review is enabled, one Tkinter window is created before
-    detection starts. Detection runs in a worker thread while the embedded plot
-    canvas is reused for each review stage and the final result.
+    Set save_result=true in MIN2Config/YAML to create <image_stem>_min2.json.
+    Saving requires img_path to identify an existing source image. The versioned JSON
+    includes the source checksum, requested/effective configuration, sampled and
+    retained edge points, manual/automatic exclusions, retry points, and each iteration.
     """
     cfg = load_config(config)
     review_enabled = (
         cfg.interactive_review if interactive_review is None else interactive_review
     )
+    if cfg.save_result and not img_path:
+        raise ValueError("save_result=true の場合は元画像の img_path が必要です。")
+
+    result_details: dict[str, Any] = {}
     if not review_enabled:
-        return _MIN2_ignore_sunspots_core(
+        result = _MIN2_ignore_sunspots_core(
             img_inst=img_inst,
             n=n,
             light_threshold=light_threshold,
@@ -974,33 +1183,54 @@ def MIN2_ignore_sunspots(
             show_simple=show_simple,
             config=cfg,
             interactive_review=False,
+            result_details=result_details,
         )
-
-    if __package__:
-        from .interactive_review import InteractiveReviewWindow
     else:
-        from interactive_review import InteractiveReviewWindow
+        if __package__:
+            from .interactive_review import InteractiveReviewWindow
+        else:
+            from interactive_review import InteractiveReviewWindow
 
-    review_window = InteractiveReviewWindow()
+        review_window = InteractiveReviewWindow()
 
-    def run_detection() -> tuple[tuple[float, float], float]:
-        """Run the existing detector with the persistent review controller."""
-        return _MIN2_ignore_sunspots_core(
-            img_inst=img_inst,
-            n=n,
-            light_threshold=light_threshold,
-            limb_wigth=limb_wigth,
-            iter_cycles=iter_cycles,
-            show=show,
-            debug=debug,
-            img_path=img_path,
-            show_simple=show_simple,
-            config=cfg,
-            interactive_review=True,
-            review_ui=review_window,
+        def run_detection() -> tuple[tuple[float, float], float]:
+            """Run the detector with the persistent review controller."""
+            return _MIN2_ignore_sunspots_core(
+                img_inst=img_inst,
+                n=n,
+                light_threshold=light_threshold,
+                limb_wigth=limb_wigth,
+                iter_cycles=iter_cycles,
+                show=show,
+                debug=debug,
+                img_path=img_path,
+                show_simple=show_simple,
+                config=cfg,
+                interactive_review=True,
+                review_ui=review_window,
+                result_details=result_details,
+            )
+
+        result = review_window.run(run_detection)
+
+    if cfg.save_result:
+        assert img_path
+        result_details.setdefault(
+            "effective_configuration",
+            {
+                "n": cfg.n,
+                "light_threshold": cfg.light_threshold,
+                "effective_light_threshold": cfg.light_threshold,
+                "limb_wigth": cfg.limb_wigth,
+                "iter_cycles": cfg.iter_cycles,
+                "show": cfg.show,
+                "debug": cfg.debug,
+                "show_simple": cfg.show_simple,
+                "interactive_review": review_enabled,
+            },
         )
-
-    return review_window.run(run_detection)
+        _save_min2_result_file(img_inst, img_path, result, cfg, result_details)
+    return result
 
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:

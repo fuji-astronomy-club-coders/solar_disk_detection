@@ -12,7 +12,7 @@
 ## プロジェクト構造
 
 ```text
-solar_disk_detection-MIN2_v2.5.0/
+solar_disk_detection-MIN2_v2.5.2/
 ├── min2/
 │   ├── __init__.py        # バージョン情報の定義
 │   └── MIN2ver2.py        # 円検出・黒点除外処理コアロジック
@@ -117,6 +117,12 @@ python -m min2.MIN2ver2 path/to/folder --dir
 
 
 ---
+
+## MIN2結果ファイルの保存
+
+MIN2の結果を元画像の隣に保存する場合は、min2_config.yaml の save_result を true にします（既定値は false）。たとえば sun_001.tiff を処理すると、同じフォルダに sun_001_min2.json を生成します。画像ファイル名・サイズ・データ型・SHA-256、要求設定と実際に適用された設定、太陽中心座標・半径、初期サンプリング点、手動／自動で除外した点、再検出点、反復ごとの残存点・円、MIN2のバージョンを記録します。これにより元画像とアルゴリズムバージョンを確認しながら検出過程を追跡できます。
+
+このJSONは Sunspot-detection-in-low-quality-images- の MIN2.load_saved_result オプションと共通の形式です。アプリケーション側は元画像名・画像サイズ・SHA-256に加え、設定と検出履歴を検証して保存済みの円情報を再利用します。同名・同サイズでも画像内容が変更されている場合は再計算します。
 
 ## 設定（YAML は任意）
 
