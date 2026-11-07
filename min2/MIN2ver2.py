@@ -252,7 +252,7 @@ def _save_min2_result_file(
     }
     temporary_path = result_path.with_suffix(result_path.suffix + ".tmp")
     temporary_path.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\\n",
+        json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\n",
         encoding="utf-8",
     )
     temporary_path.replace(result_path)
