@@ -12,7 +12,7 @@
 ## プロジェクト構造
 
 ```text
-solar_disk_detection-MIN2_v2.5.2/
+solar_disk_detection-MIN2_v2.5.3/
 ├── min2/
 │   ├── __init__.py        # バージョン情報の定義
 │   └── MIN2ver2.py        # 円検出・黒点除外処理コアロジック
@@ -40,7 +40,7 @@ solar_disk_detection-MIN2_v2.5.2/
 
 ```bash
 # リポジトリのクローンまたは展開後、ディレクトに入 we
-cd solar_disk_detection-MIN2_v2.4.0
+cd solar_disk_detection-MIN2_v2.5.3
 
 # 依存パッケージのインストール
 pip install -e .
@@ -154,7 +154,7 @@ CLI では `--config` を指定するか、省略時に環境変数 `MIN2_CONFIG
 python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 ```
 
-キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `interactive_review`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。
+キーの一覧とサンプルは `min2_config.yaml` を参照してください（`n`, `light_threshold`, `limb_wigth`, `iter_cycles`, `show`, `debug`, `show_simple`, `plot_point_size`, `plot_point_color`, `interactive_review`, `save_result`, `dir_mode_limb_wigth`）。未知のキーや不正な型・範囲は `ValueError` になります。CLI は従来どおり `show` / `debug` を既定で有効にします（YAML で上書き可）。`plot_point_size` は Matplotlib の scatter サイズ(pt²)で、`null` なら詳細表示50・簡易表示400・手動レビュー85を維持し、正の有限数を指定すると全表示に共通適用します。`plot_point_color` は `null` なら従来色を維持し、Matplotlibの色名またはHEX色を指定すると反映します。手動レビュー画面では除外点の橙色表示を維持します。
 
 ---
 
@@ -233,7 +233,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 ## モジュール定数・グローバル変数
 
-* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.5.0"`）。
+* **`version`**: ライブラリのバージョン文字列（例: `"MIN2 v2.5.3"`）。
 * **`DIR_X_LINE` (`0`)**: 横方向走査線で検出したエッジ点を示すフラグ。
 * **`DIR_Y_LINE` (`1`)**: 縦方向走査線で検出したエッジ点を示すフラグ。
 
@@ -243,7 +243,7 @@ python -m min2.MIN2ver2 sun.png --config min2_config.yaml
 
 バージョン 2.3.5 以前の旧コードでは、グローバル変数 (`img`, `divnum`, `height`, `width`) や `"GLOBAL"` パラメータに依存した実装が行われていました。
 
-本バージョン（v2.5.0）では以下の改善および互換性処理が行われています。
+本バージョン（v2.5.3）では以下の改善および互換性処理が行われています。
 
 1. **グローバル変数依存の脱却**:
 * 内部処理はすべて関数引数経由での受け渡しに統一され、マルチスレッド環境や複数画像の連続処理時の安全性が向上しました。
