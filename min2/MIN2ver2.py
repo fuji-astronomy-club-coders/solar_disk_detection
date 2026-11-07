@@ -7,6 +7,7 @@ main: MIN2_ignore_sunspots()
 limb_wigth*(2/3) の範囲にないものは黒点とみなします。
 """
 
+import json
 import os
 import pathlib
 import warnings
@@ -25,7 +26,7 @@ if __package__:
 else:  # 直接実行時
     from image_loader import load_image
 
-version = "MIN2 v2.5.0"  # trial circle / iteration の手動レビューに対応
+version = "MIN2 v2.5.1"  # trial circle / iteration の手動レビューに対応
 
 # spot の 4 番目の要素(走査方向)
 DIR_X_LINE = 0  # 横線(yが固定)をx方向に走査して得た点
@@ -83,6 +84,7 @@ class MIN2Config:
     debug: bool = False  # ログ/途中経過を出すか
     show_simple: bool = False  # 描画をシンプル表示にするか
     interactive_review: bool = False  # trial circle / 各反復で手動レビューするか
+    save_result: bool = False  # 画像と同じフォルダへMIN2結果JSONを保存するか
     dir_mode_limb_wigth: int = 60  # CLI の --dir(フォルダ一括)時に使う limb_wigth
 
     def __post_init__(self) -> None:
@@ -214,6 +216,48 @@ def _to_gray(image: np.ndarray) -> np.ndarray:
         if ch == 4:
             return cv2.cvtColor(image, cv2.COLOR_BGRA2GRAY)
     raise ValueError(f"対応していない画像形状です: shape={image.shape}")
+
+
+def _save_min2_result_file(
+    img_inst: np.ndarray | str,
+    img_path: pathlib.Path | str,
+    result: tuple[tuple[float, float], float],
+) -> pathlib.Path:
+    """Save the detected solar geometry beside its source image as a versioned JSON file."""
+    source_path = pathlib.Path(img_path)
+    if not source_path.is_file():
+        raise FileNotFoundError(f"結果を保存する元画像がありません: {source_path}")
+
+    source_image = load_image(source_path) if isinstance(img_inst, str) else img_inst
+    gray_image = _to_gray(source_image)
+    (center_x, center_y), radius = result
+    values = (float(center_x), float(center_y), float(radius))
+    if not all(np.isfinite(value) for value in values) or values[2] <= 0:
+        raise ValueError("保存する太陽円の座標・半径が不正です。")
+
+    result_path = source_path.with_name(f"{source_path.stem}_min2.json")
+    payload = {
+        "format": "solar_disk_detection.min2_result",
+        "format_version": 1,
+        "source_image": {
+            "name": source_path.name,
+            "shape": [int(gray_image.shape[0]), int(gray_image.shape[1])],
+        },
+        "solar_geometry": {
+            "center_x_px": values[0],
+            "center_y_px": values[1],
+            "radius_px": values[2],
+        },
+        "min2_version": version,
+    }
+    temporary_path = result_path.with_suffix(result_path.suffix + ".tmp")
+    temporary_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, allow_nan=False) + "\\n",
+        encoding="utf-8",
+    )
+    temporary_path.replace(result_path)
+    print(f"[INFO]:MIN2結果を保存しました: {result_path}")
+    return result_path
 
 
 def _resolve_image(
@@ -951,18 +995,22 @@ def MIN2_ignore_sunspots(
     config: "MIN2Config | dict[str, Any] | pathlib.Path | str | None" = None,
     interactive_review: bool | None = None,
 ) -> tuple[tuple[float, float], float]:
-    """Detect a solar disk and optionally review all stages in one Tkinter window.
+    """Detect a solar disk and optionally save its result beside the source image.
 
-    When interactive review is enabled, one Tkinter window is created before
-    detection starts. Detection runs in a worker thread while the embedded plot
-    canvas is reused for each review stage and the final result.
+    Set save_result=true in MIN2Config/YAML to create <image_stem>_min2.json.
+    Saving requires img_path to identify an existing source image. The JSON format
+    is versioned and includes the source filename, image dimensions, center, radius,
+    and MIN2 implementation version.
     """
     cfg = load_config(config)
     review_enabled = (
         cfg.interactive_review if interactive_review is None else interactive_review
     )
+    if cfg.save_result and not img_path:
+        raise ValueError("save_result=true の場合は元画像の img_path が必要です。")
+
     if not review_enabled:
-        return _MIN2_ignore_sunspots_core(
+        result = _MIN2_ignore_sunspots_core(
             img_inst=img_inst,
             n=n,
             light_threshold=light_threshold,
@@ -975,32 +1023,37 @@ def MIN2_ignore_sunspots(
             config=cfg,
             interactive_review=False,
         )
-
-    if __package__:
-        from .interactive_review import InteractiveReviewWindow
     else:
-        from interactive_review import InteractiveReviewWindow
+        if __package__:
+            from .interactive_review import InteractiveReviewWindow
+        else:
+            from interactive_review import InteractiveReviewWindow
 
-    review_window = InteractiveReviewWindow()
+        review_window = InteractiveReviewWindow()
 
-    def run_detection() -> tuple[tuple[float, float], float]:
-        """Run the existing detector with the persistent review controller."""
-        return _MIN2_ignore_sunspots_core(
-            img_inst=img_inst,
-            n=n,
-            light_threshold=light_threshold,
-            limb_wigth=limb_wigth,
-            iter_cycles=iter_cycles,
-            show=show,
-            debug=debug,
-            img_path=img_path,
-            show_simple=show_simple,
-            config=cfg,
-            interactive_review=True,
-            review_ui=review_window,
-        )
+        def run_detection() -> tuple[tuple[float, float], float]:
+            """Run the detector with the persistent review controller."""
+            return _MIN2_ignore_sunspots_core(
+                img_inst=img_inst,
+                n=n,
+                light_threshold=light_threshold,
+                limb_wigth=limb_wigth,
+                iter_cycles=iter_cycles,
+                show=show,
+                debug=debug,
+                img_path=img_path,
+                show_simple=show_simple,
+                config=cfg,
+                interactive_review=True,
+                review_ui=review_window,
+            )
 
-    return review_window.run(run_detection)
+        result = review_window.run(run_detection)
+
+    if cfg.save_result:
+        assert img_path
+        _save_min2_result_file(img_inst, img_path, result)
+    return result
 
 
 def _collect_images(dirpath: str) -> list[pathlib.Path]:
