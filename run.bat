@@ -1,0 +1,1 @@
+python ./min2/MIN2ver2.py
