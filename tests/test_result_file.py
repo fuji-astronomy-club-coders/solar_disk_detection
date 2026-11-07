@@ -23,9 +23,45 @@ class Min2ResultFileTests(unittest.TestCase):
             image_path = Path(directory) / "sun_001.tiff"
             image_path.write_bytes(b"image")
             expected = ((19.25, 11.75), 9.5)
+            def fake_core(**kwargs: object) -> tuple[tuple[float, float], float]:
+                details = kwargs["result_details"]
+                assert isinstance(details, dict)
+                details.update(
+                    {
+                        "effective_configuration": {
+                            "n": 10,
+                            "light_threshold": 50,
+                            "effective_light_threshold": 12800,
+                            "limb_wigth": 24,
+                            "iter_cycles": 2,
+                            "show": False,
+                            "debug": False,
+                            "show_simple": False,
+                            "interactive_review": False,
+                            "image_dtype": "uint16",
+                        },
+                        "sampled_edge_points": [[1.0, 2.0, 3.0, 0.0]],
+                        "initial_retained_points": [[1.0, 2.0, 3.0, 0.0]],
+                        "final_retained_points": [[1.0, 2.0, 3.0, 0.0]],
+                        "excluded_points": [
+                            {
+                                "iteration": 1,
+                                "stage": "automatic_sunspot_filter",
+                                "reason": "sunspot_edge_point",
+                                "point": [4.0, 5.0, 6.0, 0.0],
+                                "retry_point": [7.0, 8.0, 9.0, 0.0],
+                            }
+                        ],
+                        "iterations": [
+                            {"iteration": 1, "termination_reason": "circle_refitted"}
+                        ],
+                    }
+                )
+                return expected
+
             with patch(
                 "min2.MIN2ver2._MIN2_ignore_sunspots_core",
-                return_value=expected,
+                side_effect=fake_core,
             ) as core:
                 result = MIN2_ignore_sunspots(
                     img_inst=self.image,
@@ -54,8 +90,22 @@ class Min2ResultFileTests(unittest.TestCase):
             self.assertEqual(payload["min2_version"], "MIN2 v2.5.2")
             self.assertEqual(payload["configuration"]["requested"]["save_result"], True)
             self.assertIn("effective", payload["configuration"])
-            self.assertEqual(payload["detection_trace"]["excluded_points"], [])
-            self.assertEqual(payload["detection_trace"]["sampled_edge_points"], [])
+            self.assertEqual(
+                payload["detection_trace"]["excluded_points"][0]["point"],
+                [4.0, 5.0, 6.0, 0.0],
+            )
+            self.assertEqual(
+                payload["detection_trace"]["excluded_points"][0]["retry_point"],
+                [7.0, 8.0, 9.0, 0.0],
+            )
+            self.assertEqual(
+                payload["detection_trace"]["sampled_edge_points"],
+                [[1.0, 2.0, 3.0, 0.0]],
+            )
+            self.assertEqual(
+                payload["detection_trace"]["iterations"][0]["iteration"],
+                1,
+            )
             core.assert_called_once()
 
     def test_saving_is_disabled_by_default(self) -> None:
