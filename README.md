@@ -118,6 +118,12 @@ python -m min2.MIN2ver2 path/to/folder --dir
 
 ---
 
+## MIN2結果ファイルの保存
+
+MIN2の結果を元画像の隣に保存する場合は、min2_config.yaml の save_result を true にします（既定値は false）。たとえば sun_001.tiff を処理すると、同じフォルダに sun_001_min2.json を生成します。画像ファイル名と画像サイズ、太陽中心座標・半径、MIN2のバージョンを記録します。
+
+このJSONは Sunspot-detection-in-low-quality-images- の MIN2.load_saved_result オプションと共通の形式です。両方の機能を有効にすると、アプリケーション側は元画像名と画像サイズを確認して保存済みの円情報を再利用します。
+
 ## 設定（YAML は任意）
 
 パラメータは YAML で制御できますが、**YAML なしでも、PyYAML 未インストールでも動作します**（既定値はコード内の `MIN2Config` が持っています）。
