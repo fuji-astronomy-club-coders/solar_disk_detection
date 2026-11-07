@@ -25,10 +25,12 @@ class Min2ResultFileTests(unittest.TestCase):
             image_path.write_bytes(b"image")
             expected = ((19.25, 11.75), 9.5)
 
-            def fake_core(**kwargs: Any) -> tuple[tuple[float, float], float]:
-                details = kwargs["result_details"]
-                assert isinstance(details, dict)
-                details.update(
+            def fake_core(
+                *,
+                result_details: dict[str, Any],
+                **kwargs: object,
+            ) -> tuple[tuple[float, float], float]:
+                result_details.update(
                     {
                         "effective_configuration": {
                             "n": 10,
